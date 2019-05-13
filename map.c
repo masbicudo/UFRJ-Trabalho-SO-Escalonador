@@ -1,18 +1,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include "map.h"
+#include "consts.h"
 
 // https://en.wikipedia.org/wiki/Hash_table
 
-void map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
+int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
     int size = sizeof(map_entry[capacity]);
     map_entry* list = malloc(size);
+    if (list == 0) return ERR_OUT_OF_MEMORY;
     memset(list, 0, size);
     map->list = list;
     map->capacity = capacity;
     map->count = 0;
     map->growth_trigger = growth_trigger;
     map->growth_rate = growth_rate;
+    return OK;
 }
 
 int map_grow(map* map) {
@@ -164,4 +167,15 @@ int map_delete(map* map, int key) {
     }
 
     return ERR_KEY_NOT_FOUND;
+}
+
+int snprintf(char *buf, size_t size, const char *fmt, ...);
+
+int map_info(map* map, char* out, int length) {
+    return snprintf(out, length, "map(capacity: %d; count: %d; growth_rate: %f; growth_trigger: %d)",
+        map->capacity,
+        map->count,
+        map->growth_rate,
+        map->growth_trigger
+    );
 }
