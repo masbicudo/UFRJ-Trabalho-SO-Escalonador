@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "os.h"
-//#include "mtwist.h"
-//#include "randistrs.h"
+#include "rand.h"
 #include "consts.h"
 
 #define MAX_PROCESSOS 10
+
+pcg32_random_t r;
 
 int scheduler_init(scheduler* scheduler, int queues_count, int queue_capacity) {
     scheduler->queues = malloc(sizeof(process_queue[queues_count]));
@@ -49,7 +50,12 @@ int main()
     // - criar dispositivos
     // - criar alguns processos aleatoriamente
     
-    mt_seed32new(78493);
+    // seeding the random number generator
+    pcg32_srandom_r(&r, 922337231LL, 6854775827LL); // 2 very large primes
+
+    printf("%d\n", pcg32_random_r(&r));
+
+    return 0;
 
     map* map = malloc(sizeof(map));
     if (map_init(map, 16, 12, 2.0f) == OK) {
@@ -65,19 +71,19 @@ int main()
         process* p = os->current_process;
 
         // vai aparecer um processo novo?
-        if (mt_drand() < 0.1) {
+        if (drand(&r) < 0.1) {
             // 
         }
 
         // processo em execução vai fazer I/O?
         if (p->requires_io) {
-            if (mt_drand() <= p->disk_use_prob) {
+            if (drand(&r) <= p->disk_use_prob) {
                 // colocar na fila do dispositivo
             }
-            if (mt_drand() <= p->disk_use_prob) {
+            if (drand(&r) <= p->disk_use_prob) {
                 // 
             }
-            if (mt_drand() <= p->disk_use_prob) {
+            if (drand(&r) <= p->disk_use_prob) {
                 // 
             }
         }

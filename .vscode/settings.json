@@ -11,6 +11,7 @@
         "randistrs.h": "c",
         "process_queue.h": "c",
         "map.h": "c",
-        "consts.h": "c"
+        "consts.h": "c",
+        "rand.h": "c"
     }
 }
