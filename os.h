@@ -32,10 +32,9 @@ typedef struct {
 } scheduler;
 
 typedef struct {
-    process_queue* blocked; // pointer to a list of blocked queues by device
     int job_duration;
     char* name; // name of the device
-
+    process_queue* blocked; // pointer to a list of blocked queues by device
     process* current;
     int current_job_end;
 } device;
