@@ -24,5 +24,6 @@ int map_insert(map* map, int key, int value);
 int map_get(map* map, int key, int* out);
 int map_delete(map* map, int key);
 int map_info(map* map, char* out, int length);
+void map_dispose(map* map);
 
 #endif

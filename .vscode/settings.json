@@ -12,6 +12,7 @@
         "process_queue.h": "c",
         "map.h": "c",
         "consts.h": "c",
-        "rand.h": "c"
+        "rand.h": "c",
+        "return_codes.h": "c"
     }
 }

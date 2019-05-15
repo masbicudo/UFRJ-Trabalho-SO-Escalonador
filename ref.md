@@ -14,3 +14,4 @@ Limitations
 ===========
 
 - No check after invoking malloc
+- All queues support max amount of processes

@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "map.h"
-#include "consts.h"
+#include "return_codes.h"
 
 // https://en.wikipedia.org/wiki/Hash_table
 
@@ -178,4 +178,8 @@ int map_info(map* map, char* out, int length) {
         map->growth_rate,
         map->growth_trigger
     );
+}
+
+void map_dispose(map* map) {
+    free(map->list);
 }

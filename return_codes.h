@@ -10,6 +10,6 @@
 #define ERR_QUEUE_EMPTY 200
 #define ERR_QUEUE_FULL 201
 
-#define MAX_PROCESSES 10
+#define ERR_OUT_OF_BOUNDS 300
 
 #endif

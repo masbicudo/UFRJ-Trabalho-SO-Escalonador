@@ -19,7 +19,9 @@ typedef struct _process process;
 typedef struct _process {
     int pid;
     bool blocked;
-    int duration;
+    int remaining_duration;
+    int current_priority; // current priority level (greater means less priority)
+    int ready_since; // when this process had become ready for the last time
 
     bool requires_io;
     float disk_use_prob;
@@ -30,6 +32,8 @@ typedef struct _process {
 typedef struct {
     process_queue* queues; // pointer to a list of queues by priority
     int queue_count; // number of queues
+    process* current_process; // current process
+    int time_slice_end; // when the time slice of the current process will end
 } scheduler;
 
 typedef struct {
@@ -42,7 +46,6 @@ typedef struct {
 
 typedef struct {
     map pid_map; // map of PIDs to process pointers
-    process* current_process; // current process
     scheduler* scheduler; // process scheduler that manages ready/running processes
     device* devices; // list of devices connected and available to the operating system
 } os;
