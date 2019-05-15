@@ -29,20 +29,21 @@ typedef struct _process {
 
 typedef struct {
     process_queue* queues; // pointer to a list of queues by priority
+    int queue_count; // number of queues
 } scheduler;
 
 typedef struct {
-    int job_duration;
+    int job_duration; // (simulation) fixed amount of time needed to complete a job
     char* name; // name of the device
-    process_queue* blocked; // pointer to a list of blocked queues by device
-    process* current;
-    int current_job_end;
+    process_queue* blocked_queue; // pointer to a queue of blocked processes waiting for this device
+    process* current; // current process using this device
+    int current_job_end; // (simulation) when the os will receive a signal indicating that the job is done
 } device;
 
 typedef struct {
     map pid_map; // map of PIDs to process pointers
     process* current_process; // current process
-    scheduler scheduler; // process scheduler that manages ready/running processes
+    scheduler* scheduler; // process scheduler that manages ready/running processes
     device* devices; // list of devices connected and available to the operating system
 } os;
 
