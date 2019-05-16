@@ -40,8 +40,9 @@ typedef struct {
     int job_duration; // (simulation) fixed amount of time needed to complete a job
     char* name; // name of the device
     process_queue* blocked_queue; // pointer to a queue of blocked processes waiting for this device
-    process* current; // current process using this device
+    process* current_process; // current process using this device
     int current_job_end; // (simulation) when the os will receive a signal indicating that the job is done
+    int ret_queue; // return queue for processes whose job on this device has finished
 } device;
 
 typedef struct {
