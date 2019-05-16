@@ -24,9 +24,9 @@ typedef struct _process {
     int ready_since; // when this process had become ready for the last time
 
     bool requires_io;
-    float disk_use_prob;
-    float tape_use_prob;
-    float printer_use_prob;
+    float avg_disk_use; // avg disk usage per unit of time
+    float avg_tape_use; // avg tape usage per unit of time
+    float avg_printer_use; // avg printer usage per unit of time
 } process;
 
 typedef struct {
@@ -46,6 +46,7 @@ typedef struct {
 
 typedef struct {
     map pid_map; // map of PIDs to process pointers
+    int next_pid; // next pid number to assign
     scheduler* scheduler; // process scheduler that manages ready/running processes
     device* devices; // list of devices connected and available to the operating system
 } os;
