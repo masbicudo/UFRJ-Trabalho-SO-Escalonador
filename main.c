@@ -15,6 +15,11 @@
 // don't change the following consts
 #define NUMBER_OF_DEVICES 3
 
+#define LOG_PROC_NEW "proc-new"
+#define LOG_PROC_END "proc-end"
+#define LOG_PROC_OUT "proc-out"
+#define LOG_PROC_IN  "proc-in "
+
 double rnd_poisson(pcg32_random_t* r, double avg_iterations);
 int scheduler_init(scheduler* scheduler, int queue_capacity, int num_queues);
 int device_init(device* device, char* name, int job_duration, int ret_queue);
@@ -34,7 +39,7 @@ double rnd_poisson(pcg32_random_t* r, double avg_iterations) {
 
 int scheduler_init(scheduler* scheduler, int queue_capacity, int queue_count) {
   scheduler->current_process = 0;
-  scheduler->queues = malloc(sizeof(process_queue[queue_count]));
+  scheduler->queues = malloc(queue_count*sizeof(process_queue));
   scheduler->queue_count = queue_count;
   for (int it = 0; it < queue_count; it++)
     pq_init(scheduler->queues + it, queue_capacity);
@@ -66,7 +71,7 @@ void device_dispose(device* device) {
 
 int os_init(os* os) {
   os->next_pid = 1;
-  os->devices = malloc(sizeof(device[NUMBER_OF_DEVICES]));
+  os->devices = malloc(NUMBER_OF_DEVICES*sizeof(device));
   device_init(os->devices + 0, "Disk"   , 3 , 1);
   device_init(os->devices + 1, "Tape"   , 8 , 0);
   device_init(os->devices + 2, "Printer", 15, 0);
@@ -146,34 +151,9 @@ int clamp(int val, int min, int max) {
 }
 
 int main() {
-  printf("hello!\n");
-
   // seeding the random number generator
   pcg32_random_t* r = malloc(sizeof(pcg32_random_t));
   pcg32_srandom_r(r, 922337231LL, 6854775827LL); // 2 very large primes
-
-  // float soma = 0;
-  // float std = 0;
-  // int k;
-  // for (k = 0; k < 20; k++) {
-  //   double v = rnd_poisson(r, 100);
-  //   soma += v;
-  //   std += (v - 1)*(v - 1);
-  //   printf("%f\n", v);
-  // }
-  // printf("mean = %f\nstd = %f\n", soma / k, sqrt(std / k));
-  // return 0;
-
-  // // testing RNG
-  // printf("%d\n", pcg32_random_r(r));
-
-  // // testing hash-map
-  // map* map = malloc(sizeof(map));
-  // if (map_init(map, 16, 12, 2.0f) == OK) {
-  //   char buffer[200];
-  //   map_info(map, buffer, 200);
-  //   printf("%s\n", buffer);
-  // }
 
   os* os = malloc(sizeof(os));
   os_init(os);
@@ -184,7 +164,7 @@ int main() {
   int proc_count = 0;
 
   for (int time = 0; ; time++) {
-    // TODO: exit when no processes are alive
+    if (proc_count == MAX_PROCESSES) break;
 
     // # Simulate incoming processes.
     int new_proc_count = drand(r) < PROB_NEW_PROCESS ? rnd_poisson(r, 10) : 0;
@@ -198,26 +178,21 @@ int main() {
         
         double prob = drand(r);
         int duration = 1 + (AVG_PROC_DURATION - 1)*rnd_poisson(r, 4);
+        int pid = os->next_pid++;
         if (prob < PROB_NEW_PROC_CPU_BOUND) {
-          process_init(new_proc, os->next_pid, duration, 0, 0, 0);
+          printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid, duration, 0.0, 0.0, 0.0);
+          process_init(new_proc, pid, duration, 0, 0, 0);
         }
         else {
           prob = (prob - PROB_NEW_PROC_CPU_BOUND) / (1 - PROB_NEW_PROC_CPU_BOUND);
           float disk = prob < 0.33                 ? 0.5 : 0.0; // avg number of disk calls per time unit
           float tape = prob >= 0.33 && prob < 0.67 ? 0.3 : 0.0; // avg number of tape calls per time unit
           float printer = prob >= 0.67             ? 0.1 : 0.0; // avg number of printer calls per time unit
-          process_init(new_proc, os->next_pid, duration, disk, tape, printer);
+          printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid, duration, disk, tape, printer);
+          process_init(new_proc, pid, duration, disk, tape, printer);
         }
-
         pq_enqueue(os->scheduler->queues + 0, new_proc);
       }
-    }
-
-    // # Checking whether process has finished and disposing of used resources.
-    if (sch->current_process != 0 && sch->current_process->remaining_duration == 0) {
-      process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-      free(sch->current_process); // disposing of used memory
-      sch->current_process = 0; // freeing cpu
     }
 
     // # Checking what processes are waiting for too long and upgrading them.
@@ -239,22 +214,6 @@ int main() {
       max_wait_time = clamp(max_wait_time, 1, INT32_MAX / 8) * 8;
     }
 
-    // # Checking whether the running process must be preempted.
-    if (sch->current_process != 0 && sch->time_slice_end == time) {
-      process* preempted_proc = sch->current_process;
-      sch->current_process = 0;
-      int priority = clamp(preempted_proc->current_priority + 1, 0, MAX_PRIORITY_LEVEL - 1);
-      preempted_proc->current_priority = priority;
-      pq_enqueue(sch->queues + priority, preempted_proc);
-    }
-
-    // # Selecting the next process if cpu is available.
-    if (sch->current_process == 0) {
-      if (select_next_process(sch, &(sch->current_process)) == OK) {
-        sch->time_slice_end = time + MAX_TIME_SLICE;
-      }
-    }
-
     // # Checking devices for finished jobs.
     for (int it = 0; it < NUMBER_OF_DEVICES; it++) {
       device* device = os->devices + it;
@@ -268,6 +227,29 @@ int main() {
             device->current_job_end = time + device->job_duration;
           }
         }
+      }
+    }
+
+    // # Checking whether process has finished and disposing of used resources.
+    if (sch->current_process != 0 && sch->current_process->remaining_duration == 0) {
+      process_dispose(sch->current_process); // asking the process to dispose it's owned resources
+      free(sch->current_process); // disposing of used memory
+      sch->current_process = 0; // freeing cpu
+    }
+
+    // # Checking whether the running process must be preempted.
+    if (sch->current_process != 0 && sch->time_slice_end == time) {
+      process* preempted_proc = sch->current_process;
+      sch->current_process = 0;
+      int priority = clamp(preempted_proc->current_priority + 1, 0, MAX_PRIORITY_LEVEL - 1);
+      preempted_proc->current_priority = priority;
+      pq_enqueue(sch->queues + priority, preempted_proc);
+    }
+
+    // # Selecting the next process if cpu is available.
+    if (sch->current_process == 0) {
+      if (select_next_process(sch, &(sch->current_process)) == OK) {
+        sch->time_slice_end = time + MAX_TIME_SLICE;
       }
     }
 

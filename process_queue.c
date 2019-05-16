@@ -8,7 +8,7 @@ int pq_init(process_queue* pq, int capacity) {
     pq->current = 0;
     pq->count = 0;
     pq->capacity = capacity;
-    pq->items = malloc(sizeof(process[capacity]));
+    pq->items = malloc(capacity*sizeof(process));
     return OK;
 }
 

@@ -6,7 +6,7 @@
 // https://en.wikipedia.org/wiki/Hash_table
 
 int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
-    int size = sizeof(map_entry[capacity]);
+    int size = capacity*sizeof(map_entry);
     map_entry* list = malloc(size);
     if (list == 0) return ERR_OUT_OF_MEMORY;
     memset(list, 0, size);
@@ -20,7 +20,7 @@ int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
 
 int map_grow(map* map) {
     int new_capacity = (int)(map->capacity * map->growth_rate);
-    map_entry* new_list = malloc(sizeof(map_entry[new_capacity]));
+    map_entry* new_list = malloc(new_capacity*sizeof(map_entry));
     memset(new_list, 0, new_capacity);
 
     // reinserting items
