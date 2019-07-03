@@ -20,6 +20,7 @@ int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
 
 int map_grow(map* map) {
     int new_capacity = (int)(map->capacity * map->growth_rate);
+    if (new_capacity <= map->capacity) new_capacity = map->capacity + 1;
     map_entry* new_list = malloc(new_capacity*sizeof(map_entry));
     memset(new_list, 0, new_capacity);
 
@@ -64,7 +65,10 @@ int map_grow(map* map) {
 
     free(map->list);
     map->list = new_list;
-    map->growth_trigger = (int)(map->growth_trigger * map->growth_rate);
+    int new_growth_trigger = (int)(map->growth_trigger * map->growth_rate);
+    if (new_growth_trigger <= map->growth_trigger) new_growth_trigger = map->growth_trigger + 1;
+    if (new_growth_trigger > map->capacity) new_growth_trigger = map->capacity;
+    map->growth_trigger = new_growth_trigger;
     map->capacity = new_capacity;
 }
 

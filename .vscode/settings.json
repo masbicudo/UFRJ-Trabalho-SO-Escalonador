@@ -16,6 +16,11 @@
         "return_codes.h": "c",
         "math.h": "c",
         "process_queue.h": "c",
-        "rand_distributions.h": "c"
+        "rand_distributions.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "math_utils.h": "c",
+        "sim_plan_rand.h": "c",
+        "stdlib.h": "c"
     }
 }

@@ -24,14 +24,8 @@ typedef struct process
 {
     int pid;
     bool blocked;
-    int remaining_duration;
     int current_priority; // current priority level (greater means less priority)
     int ready_since;      // when this process had become ready for the last time
-
-    bool requires_io;
-    float avg_disk_use;    // avg disk usage per unit of time
-    float avg_tape_use;    // avg tape usage per unit of time
-    float avg_printer_use; // avg printer usage per unit of time
 } process;
 
 typedef struct scheduler
@@ -101,7 +95,7 @@ void os_dispose(os *os);
 int enqueue_on_device(int time, device *device, process *process);
 int select_next_process(scheduler *scheduler, process **out);
 
-int process_init(process *p, int pid, int duration, float avg_disk_use, float avg_tape_use, float avg_printer_use);
+int process_init(process *p, int pid);
 void process_dispose(process *process);
 
 #endif

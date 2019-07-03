@@ -96,20 +96,15 @@ int select_next_process(scheduler *scheduler, process **out)
     return ERR_QUEUE_EMPTY;
 }
 
-int process_init(process *p, int pid, int duration, float avg_disk_use, float avg_tape_use, float avg_printer_use)
+int process_init(process *p, int pid)
 {
     p->pid = pid;
 
     p->blocked = 0; // not blocked
 
-    p->remaining_duration = duration;
     p->current_priority = 0; // will start at priority queue 0 (greatest priority)
     p->ready_since = -1;     // never became ready (this is a new process)
 
-    p->requires_io = (avg_disk_use != 0.0) || (avg_tape_use != 0.0) || (avg_printer_use != 0.0);
-    p->avg_disk_use = avg_disk_use;
-    p->avg_tape_use = avg_tape_use;
-    p->avg_printer_use = avg_printer_use;
     return OK;
 }
 
