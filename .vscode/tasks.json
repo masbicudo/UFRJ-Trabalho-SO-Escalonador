@@ -6,7 +6,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "gcc -I libs -I os os/*.c libs/*.c *.c -o a.exe -g",
+            "command": "gcc -I src/libs -I src/os src/os/*.c src/libs/*.c src/*.c -o a.exe -g",
             "problemMatcher": [
                 "$gcc"
             ]

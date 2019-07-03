@@ -5,9 +5,9 @@
             "includePath": [
                 "/usr/include",
                 "/usr/local/include",
-                "${workspaceFolder}",
-                "${workspaceFolder}/libs",
-                "${workspaceFolder}/os"
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/libs",
+                "${workspaceFolder}/src/os"
         ],
             "defines": [],
             "intelliSenseMode": "clang-x64",
@@ -15,9 +15,9 @@
                 "path": [
                     "/usr/include",
                     "/usr/local/include",
-                    "${workspaceFolder}",
-                    "${workspaceFolder}/libs",
-                    "${workspaceFolder}/os"
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/src/libs",
+                    "${workspaceFolder}/src/os"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
@@ -32,9 +32,9 @@
             "includePath": [
                 "/usr/include",
                 "/usr/local/include",
-                "${workspaceFolder}",
-                "${workspaceFolder}/libs",
-                "${workspaceFolder}/os"
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/libs",
+                "${workspaceFolder}/src/os"
         ],
             "defines": [],
             "intelliSenseMode": "clang-x64",
@@ -42,9 +42,9 @@
                 "path": [
                     "/usr/include",
                     "/usr/local/include",
-                    "${workspaceFolder}",
-                    "${workspaceFolder}/libs",
-                    "${workspaceFolder}/os"
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/src/libs",
+                    "${workspaceFolder}/src/os"
                 ],
                 "limitSymbolsToIncludedHeaders": true,
                 "databaseFilename": ""
@@ -53,9 +53,9 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}",
-                "${workspaceFolder}/libs",
-                "${workspaceFolder}/os",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/libs",
+                "${workspaceFolder}/src/os",
                 "C:/Program Files (x86)/Windows Kits/8.1/Include/um",
                 "C:/Program Files (x86)/Windows Kits/8.1/Include/shared",
                 "C:/Program Files (x86)/Windows Kits/8.1/Include/winrt"
@@ -68,9 +68,9 @@
             "intelliSenseMode": "msvc-x64",
             "browse": {
                 "path": [
-                    "${workspaceFolder}",
-                    "${workspaceFolder}/libs",
-                    "${workspaceFolder}/os",
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/src/libs",
+                    "${workspaceFolder}/src/os",
                     "C:/Program Files (x86)/Windows Kits/8.1/Include/um",
                     "C:/Program Files (x86)/Windows Kits/8.1/Include/shared",
                     "C:/Program Files (x86)/Windows Kits/8.1/Include/winrt"
@@ -85,9 +85,9 @@
             "name": "WSL",
             "intelliSenseMode": "clang-x64",
             "includePath": [
-                "${workspaceRoot}",
-                "${workspaceRoot}/libs",
-                "${workspaceRoot}/os",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/src/libs",
+                "${workspaceFolder}/src/os",
                 "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/include/c++/5",
                 "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/include/x86_64-linux-gnu/c++/5",
                 "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/include/c++/5/backward",
@@ -103,9 +103,9 @@
             ],
             "browse": {
                 "path": [
-                    "${workspaceRoot}",
-                    "${workspaceRoot}/libs",
-                    "${workspaceRoot}/os",
+                    "${workspaceFolder}/src",
+                    "${workspaceFolder}/src/libs",
+                    "${workspaceFolder}/src/os",
                     "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/include/c++/5",
                     "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/include/x86_64-linux-gnu/c++/5",
                     "${localappdata}/Packages/CanonicalGroupLimited.UbuntuonWindows_79rhkp1fndgsc/LocalState/rootfs/usr/lib/gcc/x86_64-linux-gnu/5/include",
