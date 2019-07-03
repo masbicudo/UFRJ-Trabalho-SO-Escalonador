@@ -1,6 +1,8 @@
+# Compiling
 
-Random Number Generators
-------------------------
+    gcc -I libs -I os os/*.c libs/*.c *.c -o a.exe -g
+
+# Random Number Generators
 
 - https://www.cs.hmc.edu/~geoff/mtwist.html
 - http://www.pcg-random.org/
@@ -9,9 +11,7 @@ Random Number Generators
 - https://www.random.org/
 - https://www.dcode.fr/next-prime-number
 
-
-Limitations
-===========
+# Limitations
 
 - No check after invoking malloc
 - All queues support max amount of processes

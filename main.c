@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "os.h"
-#include "rand.h"
-#include "return_codes.h"
 #include <math.h>
+#include "math_utils.h"
+#include "os.h"
+#include "rand_distributions.h"
+#include "return_codes.h"
 
 #define MAX_PROCESSES 10
 #define MAX_TIME_SLICE 4
@@ -20,143 +21,16 @@
 #define LOG_PROC_OUT "proc-out"
 #define LOG_PROC_IN  "proc-in "
 
-double rnd_poisson(pcg32_random_t* r, double avg_iterations);
-int scheduler_init(scheduler* scheduler, int queue_capacity, int num_queues);
-int device_init(device* device, char* name, int job_duration, int ret_queue);
-int os_init(os* os);
-
-double rnd_poisson(pcg32_random_t* r, double avg_iterations) {
-  // returns the number of processes that will appear in a unit of time
-  // avg_iterations: the average number of iterations to get the result
-  double p = 1.0 / avg_iterations;
-  int x = 1;
-  while (1) {
-    double d = drand(r);
-    if (d < p) return x / avg_iterations;
-    x++;
-  }
-}
-
-int scheduler_init(scheduler* scheduler, int queue_capacity, int queue_count) {
-  scheduler->current_process = 0;
-  scheduler->queues = malloc(queue_count*sizeof(process_queue));
-  scheduler->queue_count = queue_count;
-  for (int it = 0; it < queue_count; it++)
-    pq_init(scheduler->queues + it, queue_capacity);
-  return OK;
-}
-
-void scheduler_dispose(scheduler* scheduler) {
-  for (int it = 0; it < scheduler->queue_count; it++)
-    pq_dispose(scheduler->queues + it);
-  free(scheduler->queues);
-}
-
-int device_init(device* device, char* name, int job_duration, int ret_queue) {
-  device->name = name;
-  device->job_duration = job_duration;
-  device->current_process = 0;
-  device->current_job_end = -1;
-  device->ret_queue = ret_queue;
-  // Initializing device blocked queue
-  device->blocked_queue = malloc(sizeof(process_queue));
-  pq_init(device->blocked_queue, MAX_PROCESSES);
-  return OK;
-}
-
-void device_dispose(device* device) {
-  pq_dispose(device->blocked_queue);
-  free(device->blocked_queue);
-}
-
-int os_init(os* os) {
-  os->next_pid = 1;
-  os->devices = malloc(NUMBER_OF_DEVICES*sizeof(device));
-  device_init(os->devices + 0, "Disk"   , 3 , 1);
-  device_init(os->devices + 1, "Tape"   , 8 , 0);
-  device_init(os->devices + 2, "Printer", 15, 0);
-  map_init(&(os->pid_map), MAX_PROCESSES * 2, MAX_PROCESSES * 2 * 0.75, 2.0);
-  os->scheduler = malloc(sizeof(scheduler));
-  scheduler_init(os->scheduler, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
-  return OK;
-}
-
-void os_dispose(os* os) {
-  scheduler_dispose(os->scheduler);
-  free(os->scheduler);
-  map_dispose(&(os->pid_map));
-  device_dispose(os->devices + 2);
-  device_dispose(os->devices + 1);
-  device_dispose(os->devices + 0);
-  free(os->devices);
-}
-
-int create_process(os* os) {
-  return OK;
-}
-
-int enqueue_on_device(int time, device* device, process* process) {
-  if ((device->blocked_queue)->count == 0 && device->current_process == 0) {
-    // There are no processes waiting to use the device and
-    // no process is currently using the device, which means we can
-    // give this process the control over this device.
-    device->current_process = process;
-    device->current_job_end = time + device->job_duration;
-    return OK;
-  }
-
-  // Either there is a process currently using this device
-  // or there are processes on the queue waiting to get control
-  // over it. Either way, this process must be enqueued.
-  int r = pq_enqueue(device->blocked_queue, process);
-  return r;
-}
-
-int select_next_process(scheduler* scheduler, process** out) {
-  // iterating queues in order of priority
-  for (int it = 0; it < scheduler->queue_count; it++) {
-    process_queue* queue = scheduler->queues + it;
-    if (queue->count > 0) {
-      // get process out of the queue
-      pq_dequeue(queue, out);
-      return OK;
-    }
-  }
-  // all queues are empty
-  return ERR_QUEUE_EMPTY;
-}
-
-void process_init(process* p, int pid, int duration, float avg_disk_use, float avg_tape_use, float avg_printer_use) {
-  p->pid = pid;
-
-  p->blocked = 0; // not blocked
-
-  p->remaining_duration = duration;
-  p->current_priority = 0; // will start at priority queue 0 (greatest priority)
-  p->ready_since = -1; // never became ready (this is a new process)
-  
-  p->requires_io = (avg_disk_use != 0.0) || (avg_tape_use != 0.0) || (avg_printer_use != 0.0);
-  p->avg_disk_use = avg_disk_use;
-  p->avg_tape_use = avg_tape_use;
-  p->avg_printer_use = avg_printer_use;
-}
-
-void process_dispose(process* process) {
-}
-
-int clamp(int val, int min, int max) {
-  if (val > max) return max;
-  if (val < min) return min;
-  return val;
-}
-
 int main() {
   // seeding the random number generator
   pcg32_random_t* r = malloc(sizeof(pcg32_random_t));
   pcg32_srandom_r(r, 922337231LL, 6854775827LL); // 2 very large primes
 
   os* os = malloc(sizeof(os));
-  os_init(os);
+  os_init(os, NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
+  device_init(os->devices + 0, "Disk"   , 3 , 1, MAX_PROCESSES);
+  device_init(os->devices + 1, "Tape"   , 8 , 0, MAX_PROCESSES);
+  device_init(os->devices + 2, "Printer", 15, 0, MAX_PROCESSES);
 
   scheduler* sch = os->scheduler;
 

@@ -6,7 +6,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "gcc *.c -o a.exe -g"
+            "command": "gcc -I libs -I os os/*.c libs/*.c *.c -o a.exe -g"
         }
     ]
 }

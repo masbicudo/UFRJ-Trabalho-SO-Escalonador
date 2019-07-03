@@ -1,33 +1,32 @@
 #include <stdlib.h>
 #include <string.h>
-#include "process_queue.h"
+#include "queue.h"
 #include "return_codes.h"
-#include "os.h"
 
-int pq_init(process_queue* pq, int capacity) {
+int queue_init(queue* pq, int capacity) {
     pq->current = 0;
     pq->count = 0;
     pq->capacity = capacity;
-    pq->items = malloc(capacity*sizeof(process));
+    pq->items = malloc(capacity*sizeof(void*));
     return OK;
 }
 
-void pq_dispose(process_queue* pq) {
+void queue_dispose(queue* pq) {
     free(pq->items);
 }
 
-int pq_enqueue(process_queue* pq, process* process) {
+int queue_enqueue(queue* pq, void* item) {
     if (pq->count == pq->capacity)
         return ERR_QUEUE_FULL;
 
     int index = (pq->current + pq->count) % pq->capacity;
-    pq->items[index] = process;
+    pq->items[index] = item;
     pq->count++;
 
     return OK;
 }
 
-int pq_dequeue(process_queue* pq, process** out) {
+int queue_dequeue(queue* pq, void** out) {
     if (pq->count == 0)
         return ERR_QUEUE_EMPTY;
 
@@ -38,7 +37,7 @@ int pq_dequeue(process_queue* pq, process** out) {
     return OK;
 }
 
-int pq_get(process_queue* pq, int index, process** out) {
+int queue_get(queue* pq, int index, void** out) {
     if (index < 0 || index >= pq->count) return ERR_OUT_OF_BOUNDS;
     *out =  pq->items[(pq->current + index) % pq->capacity];
     return OK;

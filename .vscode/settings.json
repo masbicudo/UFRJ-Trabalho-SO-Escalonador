@@ -9,10 +9,13 @@
         "type_traits": "c",
         "mtwist.h": "c",
         "randistrs.h": "c",
-        "process_queue.h": "c",
+        "queue.h": "c",
         "map.h": "c",
         "consts.h": "c",
         "rand.h": "c",
-        "return_codes.h": "c"
+        "return_codes.h": "c",
+        "math.h": "c",
+        "process_queue.h": "c",
+        "rand_distributions.h": "c"
     }
 }
