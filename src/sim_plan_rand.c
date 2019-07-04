@@ -87,6 +87,24 @@ int plan_rand_request_io(simulation_plan *plan, int time, int pid)
     return 2;
   return -1;
 }
+bool plan_rand_create_device(simulation_plan *plan, int device_index, sim_plan_device* out) {
+  if (device_index == 0) {
+    out->name = "disk";
+    out->job_duration = 3;
+    out->ret_queue = 1;
+  }
+  if (device_index == 1) {
+    out->name = "tape";
+    out->job_duration = 8;
+    out->ret_queue = 0;
+  }
+  if (device_index == 2) {
+    out->name = "print";
+    out->job_duration = 15;
+    out->ret_queue = 0;
+  }
+  return device_index >= 0 && device_index < 3;
+}
 void plan_rand_dispose(simulation_plan *plan)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
@@ -120,6 +138,7 @@ void plan_rand_init(
   plan->data = (void *)data;
   data->rng = r;
   data->sim_proc_capacity = max_sim_procs;
+  data->sim_proc_count = 0;
   data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 

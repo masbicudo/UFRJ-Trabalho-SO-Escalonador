@@ -25,7 +25,7 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
     if (entry->time == time && entry->action == ACTION_NEW)
     {
       int sim_pid = data->sim_proc_count;
-      if (entry->sim_pid - 1 == sim_pid)
+      if (entry->sim_pid == sim_pid)
       {
         // allocating next available sim_pid
         data->sim_proc_count++;
@@ -139,7 +139,7 @@ int match_numbers(char *code, int *value)
 bool read_char(char **code, char ch)
 {
   if (**code != ch) return false;
-  *code++;
+  (*code)++;
   return true;
 }
 bool read_string(char** code, const char* str) {
@@ -156,7 +156,8 @@ bool match_head(char *code, char* name, int* value)
   code += match_spaces(code);
   if (!read_char(&code, '[')) return false;
   code += match_spaces(code);
-  if (!read_string(&code, "devices")) return false;
+  if (!read_string(&code, name)) return false;
+  code += match_spaces(code);
   code += match_numbers(code, &ret_value);
   code += match_spaces(code);
   if (!read_char(&code, ']')) return false;
@@ -238,12 +239,12 @@ void plan_txt_dispose(simulation_plan *plan)
 }
 char *trim(char *line)
 {
-  while (line[0] == ' ')
+  while (line[0] == ' ' || line[0] == '\t')
     line++;
   char *l2 = line;
-  while (l2[0] != '#' && l2[0] != '\0')
+  while (l2[0] != '#' && l2[0] != '\n' && l2[0] != '\0')
     l2++;
-  while (l2 - 1 > line && l2[-1] == ' ')
+  while (l2 - 1 > line && (l2[-1] == ' ' || l2[-1] == '\t'))
     l2--;
   l2[0] = '\0';
   return line;
@@ -252,6 +253,19 @@ void device_entry_dispose(void* ptr) {
   device_entry* entry = (device_entry*)ptr;
   free(entry->name);
 }
+bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_device* out) {
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+  int len = utarray_len(data->devices);
+  if (device_index >= 0 && device_index < len)
+  {
+    device_entry* entry = (device_entry*)utarray_eltptr(data->devices, device_index);
+    out->name = entry->name;
+    out->job_duration = entry->duration;
+    out->ret_queue = entry->return_queue;
+    return true;
+  }
+  return false;
+}
 UT_icd device_entry_ptr_icd = {sizeof(device_entry), 0, 0, device_entry_dispose};
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
@@ -259,6 +273,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   txt_sim_data *data = malloc(sizeof(txt_sim_data));
   plan->data = (void *)data;
   data->sim_proc_capacity = max_sim_procs;
+  data->sim_proc_count = 0;
   data->sim_procs = malloc(max_sim_procs * sizeof(txt_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
@@ -297,17 +312,16 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   {
     char *trimmed = trim(line);
     int str_len;
-    if (mode == 1 && match_entry(line, &num1, &str2, &str_len, &num3, &num4))
+    if (mode == 1 && match_entry(line, 0, &str2, &str_len, &num3, &num4))
     {
       char *str_new = malloc(str_len + 1);
       strncpy(str_new, str2, str_len);
       str_new[str_len] = 0;
 
       // creating the device entry, and then adding to the array
-      if (num1 >= 0 && num3 >= 0 && num4 >= 0)
+      if (num3 >= 0 && num4 >= 0)
       {
         device_entry entry;
-        entry.id = num1;
         entry.name = str_new;
         entry.duration = num3;
         entry.return_queue = num4;
@@ -327,12 +341,12 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 
       int action_id;
       int device_id = -1;
-      if (strcmp("new", str_new))
+      if (strcmp("new", str_new) == 0)
       {
         action_id = ACTION_NEW;
         device_id = 0;
       }
-      else if (strcmp("end", str_new))
+      else if (strcmp("end", str_new) == 0)
       {
         action_id = ACTION_END;
         device_id = 0;
@@ -342,10 +356,11 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         device_entry *p = NULL;
         while ((p = (device_entry *)utarray_next(data->devices, p)))
         {
-          if (strcmp(p->name, str_new))
+          if (strcmp(p->name, str_new) == 0)
           {
             action_id = ACTION_IO;
-            device_id = p->id;
+            device_id = utarray_eltidx(data->devices, p);
+            break;
           }
         }
       }
@@ -359,7 +374,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         entry.action = action_id;
         entry.device_id = device_id;
         entry.sim_pid = sim_pid;
-        utarray_push_back(data->devices, &entry);
+        utarray_push_back(data->global_timeline, &entry);
       }
     }
     else if (mode == 3 && match_entry(line, &num1, &str2, &str_len, 0, 0))
@@ -373,12 +388,12 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 
       int action_id;
       int device_id = -1;
-      if (strcmp("new", str_new))
+      if (strcmp("new", str_new) == 0)
       {
         action_id = ACTION_NEW;
         device_id = 0;
       }
-      else if (strcmp("end", str_new))
+      else if (strcmp("end", str_new) == 0)
       {
         action_id = ACTION_END;
         device_id = 0;
@@ -388,10 +403,11 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         device_entry *p = NULL;
         while ((p = (device_entry *)utarray_next(data->devices, p)))
         {
-          if (strcmp(p->name, str_new))
+          if (strcmp(p->name, str_new) == 0)
           {
             action_id = ACTION_IO;
-            device_id = p->id;
+            device_id = utarray_eltidx(data->devices, p);
+            break;
           }
         }
       }
@@ -432,5 +448,6 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   plan->is_process_finished = &plan_txt_is_process_finished;
   plan->run_one_time_unit = &plan_txt_run_one_time_unit;
   plan->requires_io = &plan_txt_request_io;
+  plan->create_device = &plan_txt_create_device;
   plan->dispose = &plan_txt_dispose;
 }

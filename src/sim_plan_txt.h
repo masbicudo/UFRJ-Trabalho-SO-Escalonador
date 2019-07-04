@@ -20,7 +20,6 @@ struct timeline_entry
 };
 struct device_entry
 {
-  int id;
   char *name;
   int duration;
   int return_queue;

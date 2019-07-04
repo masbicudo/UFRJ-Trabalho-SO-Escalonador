@@ -15,31 +15,38 @@
 #define PROB_NEW_PROC_CPU_BOUND 0.5
 
 // don't change the following consts
-#define NUMBER_OF_DEVICES 3
+#define MAX_NUMBER_OF_DEVICES 10
 
 int main()
 {
   simulation_plan *plan = malloc(sizeof(simulation_plan));
-  if (0) {
+  if (0)
+  {
     // initialized a random execution plan
     plan_rand_init(
-      plan,
-      922337231LL,
-      6854775827LL,
-      MAX_PROCESSES,
-      PROB_NEW_PROCESS,
-      AVG_PROC_DURATION,
-      PROB_NEW_PROC_CPU_BOUND);
+        plan,
+        922337231LL,
+        6854775827LL,
+        MAX_PROCESSES,
+        PROB_NEW_PROCESS,
+        AVG_PROC_DURATION,
+        PROB_NEW_PROC_CPU_BOUND);
   }
-  else {
+  else
+  {
     plan_txt_init(plan, "plans/one_proc_test_plan.txt", MAX_PROCESSES);
   }
 
   os *os = malloc(sizeof(os));
-  os_init(os, NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
-  device_init(os->devices + 0, "Disk", 3, 1, MAX_PROCESSES);
-  device_init(os->devices + 1, "Tape", 8, 0, MAX_PROCESSES);
-  device_init(os->devices + 2, "Printer", 15, 0, MAX_PROCESSES);
+  os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
+
+  for (int itdev = 0;; itdev++)
+  {
+    sim_plan_device dev;
+    if (!plan->create_device(plan, itdev, &dev))
+      break;
+    device_init(os->devices + itdev, dev.name, dev.job_duration, dev.ret_queue, MAX_PROCESSES);
+  }
 
   scheduler *sch = os->scheduler;
 
@@ -95,7 +102,7 @@ int main()
     }
 
     // # Checking devices for finished jobs.
-    for (int it = 0; it < NUMBER_OF_DEVICES; it++)
+    for (int it = 0; it < MAX_NUMBER_OF_DEVICES; it++)
     {
       device *device = os->devices + it;
       if (device->current_job_end == time)
@@ -171,4 +178,3 @@ int main()
   (*plan->dispose)(plan);
   free(plan);
 }
-
