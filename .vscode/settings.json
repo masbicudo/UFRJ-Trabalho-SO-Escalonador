@@ -21,6 +21,11 @@
         "string_view": "c",
         "math_utils.h": "c",
         "sim_plan_rand.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "sim_plan_txt.h": "c",
+        "regex.h": "c",
+        "uthash.h": "c",
+        "*.tcc": "c",
+        "sstream": "c"
     }
 }

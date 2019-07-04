@@ -5,6 +5,7 @@
 #include "os.h"
 #include "return_codes.h"
 #include "sim_plan_rand.h"
+#include "sim_plan_txt.h"
 
 #define MAX_PROCESSES 10 // maximum number of processes that will be created by the simulation
 #define MAX_TIME_SLICE 4
@@ -18,6 +19,22 @@
 
 int main()
 {
+  simulation_plan *plan = malloc(sizeof(simulation_plan));
+  if (0) {
+    // initialized a random execution plan
+    plan_rand_init(
+      plan,
+      922337231LL,
+      6854775827LL,
+      MAX_PROCESSES,
+      PROB_NEW_PROCESS,
+      AVG_PROC_DURATION,
+      PROB_NEW_PROC_CPU_BOUND);
+  }
+  else {
+    plan_txt_init(plan, "plans/one_proc_test_plan.txt", MAX_PROCESSES);
+  }
+
   os *os = malloc(sizeof(os));
   os_init(os, NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
   device_init(os->devices + 0, "Disk", 3, 1, MAX_PROCESSES);
@@ -25,18 +42,6 @@ int main()
   device_init(os->devices + 2, "Printer", 15, 0, MAX_PROCESSES);
 
   scheduler *sch = os->scheduler;
-
-  simulation_plan *plan = malloc(sizeof(simulation_plan));
-
-  // initialized a random execution plan
-  plan_rand_init(
-    plan,
-    922337231LL,
-    6854775827LL,
-    MAX_PROCESSES,
-    PROB_NEW_PROCESS,
-    AVG_PROC_DURATION,
-    PROB_NEW_PROC_CPU_BOUND);
 
   // TODO: initialize processes randomly
   int proc_count = 0;
@@ -162,5 +167,8 @@ int main()
 
   os_dispose(os);
   free(os);
+
+  (*plan->dispose)(plan);
+  free(plan);
 }
 
