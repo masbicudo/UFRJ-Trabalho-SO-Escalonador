@@ -105,77 +105,86 @@ int main()
       max_wait_time = clamp(max_wait_time, 1, INT32_MAX / 8) * 8;
     }
 
-    // # Checking devices for finished jobs.
-    for (int it = 0; it < MAX_NUMBER_OF_DEVICES; it++)
-    {
-      device *device = os->devices + it;
-      if (device->is_connected && device->current_job_end == time)
+    while (1) {
+      // # Selecting the next process if cpu is available.
+      if (sch->current_process == NULL)
       {
-        device->current_process->ready_since = time;
-        process_queue *queue_to_ret_to = sch->queues + device->ret_queue;
-        if (pq_enqueue(queue_to_ret_to, device->current_process) == OK)
+        if (select_next_process(sch, &(sch->current_process)) == OK)
         {
-          device->current_process = 0;
-          // checking whether there is a process waiting for the device and set it as the current
-          if (pq_dequeue(device->blocked_queue, &(device->current_process)) == OK)
+          sch->time_slice_end = time + MAX_TIME_SLICE;
+        }
+        else {
+          // if a process was not found we set the running process to NULL
+          sch->current_process = NULL;
+        }
+      }
+
+      // # Checking devices for finished jobs.
+      // This must be inside the loop, because
+      // there are immediate devices that don't
+      // use any time at all, but they do preempt
+      // the CPU from the process that asked for IO.
+      for (int it = 0; it < MAX_NUMBER_OF_DEVICES; it++)
+      {
+        device *device = os->devices + it;
+        if (device->is_connected && device->current_job_end == time)
+        {
+          device->current_process->ready_since = time;
+          process_queue *queue_to_ret_to = sch->queues + device->ret_queue;
+          if (pq_enqueue(queue_to_ret_to, device->current_process) == OK)
           {
-            device->current_job_end = time + device->job_duration;
+            device->current_process = NULL;
+            // checking whether there is a process waiting for the device and set it as the current
+            if (pq_dequeue(device->blocked_queue, &(device->current_process)) == OK)
+            {
+              device->current_job_end = time + device->job_duration;
+            }
           }
         }
       }
-    }
 
-    // # Checking whether process has finished and disposing of used resources.
-    if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
-    {
-      process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-      free(sch->current_process);            // disposing of used memory
-      sch->current_process = 0;              // freeing cpu
-    }
-
-    // # Checking whether the running process must be preempted.
-    if (sch->current_process != 0 && sch->time_slice_end == time)
-    {
-      process *preempted_proc = sch->current_process;
-      sch->current_process = 0;
-      int priority = clamp(preempted_proc->current_priority + 1, 0, MAX_PRIORITY_LEVEL - 1);
-      preempted_proc->current_priority = priority;
-      pq_enqueue(sch->queues + priority, preempted_proc);
-    }
-
-    // # Selecting the next process if cpu is available.
-    if (sch->current_process == 0)
-    {
-      if (select_next_process(sch, &(sch->current_process)) == OK)
+      // # Checking whether process has finished and disposing of used resources.
+      if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
       {
-        sch->time_slice_end = time + MAX_TIME_SLICE;
+        process_dispose(sch->current_process); // asking the process to dispose it's owned resources
+        free(sch->current_process);            // disposing of used memory
+        sch->current_process = NULL;              // freeing cpu
+        continue;
       }
-    }
 
-    // # Running the current process.
-    process *run = sch->current_process;
-    if (run != 0)
-    {
-      // Does the process that's currently executing
-      // want to do an IO operation at this time unit?
-      int io_requested_device = (*plan->requires_io)(plan, time, run->pid);
-      if (io_requested_device >= 0)
+      // # Checking whether the running process must be preempted.
+      if (sch->current_process != NULL && sch->time_slice_end == time)
       {
-        bool io_was_requested = false;
-        enqueue_on_device(time, os->devices + io_requested_device, run);
-        io_was_requested = true;
+        process *preempted_proc = sch->current_process;
+        sch->current_process = NULL;
+        int priority = clamp(preempted_proc->current_priority + 1, 0, MAX_PRIORITY_LEVEL - 1);
+        preempted_proc->current_priority = priority;
+        preempted_proc->ready_since = time;
+        pq_enqueue(sch->queues + priority, preempted_proc);
+        continue;
+      }
 
-        if (io_was_requested)
+      // # Checking whether the process wants to do an IO operation.
+      // If it wants, then it will release the CPU for another process.
+      if (sch->current_process != NULL)
+      {
+        int io_requested_device = (*plan->requires_io)(plan, time, sch->current_process->pid);
+        if (io_requested_device >= 0)
         {
-          // Preempting current process
-          sch->current_process = 0;
+          // moving current process to the device wait queue
+          enqueue_on_device(time, os->devices + io_requested_device, sch->current_process);
+          sch->current_process = NULL;
+          continue;
         }
       }
-    }
 
-    // increment running process internal duration
-    if (run != 0)
-      (*plan->run_one_time_unit)(plan, time, run->pid);
+      // # Running the current process.
+      // increment running process internal duration
+      if (sch->current_process != NULL)
+        (*plan->run_one_time_unit)(plan, time, sch->current_process->pid);
+
+      break;
+    }
   }
 
   os_dispose(os);
