@@ -6,6 +6,7 @@
 #include "return_codes.h"
 #include "sim_plan_rand.h"
 #include "sim_plan_txt.h"
+#include "ansi_console.h"
 
 #define MAX_PROCESSES 10 // maximum number of processes that will be created by the simulation
 #define MAX_TIME_SLICE 4
@@ -19,6 +20,9 @@
 
 int main()
 {
+  setANSI();
+
+  printf("\x1b[91mSomething!");
   simulation_plan *plan = malloc(sizeof(simulation_plan));
   if (0)
   {
