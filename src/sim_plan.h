@@ -6,7 +6,6 @@
 typedef struct simulation_plan simulation_plan;
 typedef struct simulation_entry simulation_entry;
 typedef struct simulation_entry_type simulation_entry_type;
-typedef struct sim_proc sim_proc;
 
 typedef int sim_plan_incoming_processes(simulation_plan *plan, int time);
 typedef void sim_plan_create_process(simulation_plan *plan, int time, int pid);
@@ -24,20 +23,6 @@ struct simulation_plan
   sim_plan_run_one_time_unit *run_one_time_unit;
   sim_plan_requires_io *requires_io;
   sim_plan_dispose *dispose;
-};
-
-struct sim_proc
-{
-  int pid;
-  char *name;
-
-  int proc_time;
-  int remaining_duration;
-
-  bool requires_io;
-  float avg_disk_use;    // avg disk usage per unit of time
-  float avg_tape_use;    // avg tape usage per unit of time
-  float avg_printer_use; // avg printer usage per unit of time
 };
 
 #endif

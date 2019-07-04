@@ -23,7 +23,7 @@ void plan_rand_create_process(simulation_plan *plan, int time, int pid)
   int sim_pid = data->sim_proc_count;
   map_insert(&data->pid_map, pid, sim_pid);
   data->sim_proc_count++;
-  sim_proc *sim_proc = data->sim_procs + sim_pid;
+  rand_sim_proc *sim_proc = data->sim_procs + sim_pid;
   memset(sim_proc, 0, sizeof(sim_proc));
 
   // filling the new sim_proc data:
@@ -57,28 +57,28 @@ void plan_rand_create_process(simulation_plan *plan, int time, int pid)
     printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid, duration, avg_disk_use, avg_tape_use, avg_printer_use);
   }
 }
-sim_proc *plan_rand_get_sim_proc(simulation_plan *plan, int pid)
+rand_sim_proc *plan_rand_get_sim_proc(simulation_plan *plan, int pid)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
   int sim_pid;
   map_get(&data->pid_map, pid, &sim_pid);
-  sim_proc *sim_proc = &data->sim_procs[sim_pid];
+  rand_sim_proc *sim_proc = &data->sim_procs[sim_pid];
   return sim_proc;
 }
 bool plan_rand_is_process_finished(simulation_plan *plan, int time, int pid)
 {
-  sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
+  rand_sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
   return sim_proc->remaining_duration == 0;
 }
 void plan_rand_run_one_time_unit(simulation_plan *plan, int time, int pid)
 {
-  sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
+  rand_sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
   sim_proc->remaining_duration--;
 }
 int plan_rand_request_io(simulation_plan *plan, int time, int pid)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
-  sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
+  rand_sim_proc *sim_proc = plan_rand_get_sim_proc(plan, pid);
   if (drand(data->rng) <= sim_proc->avg_disk_use)
     return 0;
   if (drand(data->rng) <= sim_proc->avg_tape_use)
@@ -120,7 +120,7 @@ void plan_rand_init(
   plan->data = (void *)data;
   data->rng = r;
   data->sim_proc_capacity = max_sim_procs;
-  data->sim_procs = malloc(max_sim_procs * sizeof(sim_proc));
+  data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
   plan->incoming_processes = &plan_rand_incoming_processes;

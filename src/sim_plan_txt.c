@@ -29,7 +29,7 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
       {
         // allocating next available sim_pid
         data->sim_proc_count++;
-        sim_proc *sim_proc = data->sim_procs + sim_pid;
+        txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
         memset(sim_proc, 0, sizeof(sim_proc));
 
         // incrementing count
@@ -53,7 +53,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   int sim_pid;
   for (; sim_pid < data->sim_proc_count; sim_pid++)
   {
-    sim_proc *sim_proc = data->sim_procs + sim_pid;
+    txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
     if (sim_proc->pid == 0)
       break;
   }
@@ -62,7 +62,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   // filling the new sim_proc data:
   // - process duration
   // - IO request probability for each device
-  sim_proc *sim_proc = &data->sim_procs[sim_pid];
+  txt_sim_proc *sim_proc = &data->sim_procs[sim_pid];
   printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid);
 }
 int plan_txt_get_sim_pid(simulation_plan *plan, int pid)
@@ -76,7 +76,7 @@ timeline_entry *find_entry(simulation_plan *plan, int time, int pid, int action_
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
   int sim_pid = plan_txt_get_sim_pid(plan, pid);
-  sim_proc *sim_proc = data->sim_procs + sim_pid;
+  txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
 
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
@@ -102,7 +102,7 @@ void plan_txt_run_one_time_unit(simulation_plan *plan, int time, int pid)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
   int sim_pid = plan_txt_get_sim_pid(plan, pid);
-  sim_proc *sim_proc = data->sim_procs + sim_pid;
+  txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
   sim_proc->proc_time++;
 }
 int plan_txt_request_io(simulation_plan *plan, int time, int pid)
@@ -259,7 +259,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   txt_sim_data *data = malloc(sizeof(txt_sim_data));
   plan->data = (void *)data;
   data->sim_proc_capacity = max_sim_procs;
-  data->sim_procs = malloc(max_sim_procs * sizeof(sim_proc));
+  data->sim_procs = malloc(max_sim_procs * sizeof(txt_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
   // we are going to read all the txt file at

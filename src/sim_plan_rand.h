@@ -6,13 +6,14 @@
 #include "rand.h"
 
 typedef struct rand_sim_data rand_sim_data;
+typedef struct rand_sim_proc rand_sim_proc;
 
 struct rand_sim_data {
   pcg32_random_t *rng;
   
   int sim_proc_count;
   int sim_proc_capacity;
-  sim_proc* sim_procs;
+  rand_sim_proc* sim_procs;
 
   map pid_map;
 
@@ -32,5 +33,16 @@ void plan_rand_init(
     float avg_proc_duration,
     float prob_new_proc_cpu_bound
 );
+
+struct rand_sim_proc
+{
+  int pid;
+  int remaining_duration;
+
+  bool requires_io;
+  float avg_disk_use;    // avg disk usage per unit of time
+  float avg_tape_use;    // avg tape usage per unit of time
+  float avg_printer_use; // avg printer usage per unit of time
+};
 
 #endif

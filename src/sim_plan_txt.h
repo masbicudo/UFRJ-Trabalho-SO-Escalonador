@@ -9,6 +9,7 @@
 typedef struct txt_sim_data txt_sim_data;
 typedef struct timeline_entry timeline_entry;
 typedef struct device_entry device_entry;
+typedef struct txt_sim_proc txt_sim_proc;
 
 struct timeline_entry
 {
@@ -29,13 +30,19 @@ struct txt_sim_data
 {
   int sim_proc_count;
   int sim_proc_capacity;
-  sim_proc *sim_procs;
+  txt_sim_proc *sim_procs;
 
   map pid_map;
 
   UT_array *global_timeline;
   UT_array *proc_timeline;
   UT_array *devices;
+};
+
+struct txt_sim_proc
+{
+  int pid;
+  int proc_time;
 };
 
 void plan_txt_dispose(simulation_plan *plan);
