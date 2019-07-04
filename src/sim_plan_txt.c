@@ -19,6 +19,8 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
   int count = 0;
+
+  // it is only possible to start new processes from the global timeline sections
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
   {
@@ -30,7 +32,7 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
         // allocating next available sim_pid
         data->sim_proc_count++;
         txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
-        memset(sim_proc, 0, sizeof(sim_proc));
+        memset(sim_proc, 0, sizeof(txt_sim_proc));
 
         // incrementing count
         count++;
@@ -53,6 +55,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   int sim_pid;
   for (; sim_pid < data->sim_proc_count; sim_pid++)
   {
+    // searching for a sim_proc that is NOT initialized (pid == 0)
     txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
     if (sim_proc->pid == 0)
       break;
@@ -60,9 +63,12 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   map_insert(&data->pid_map, pid, sim_pid);
 
   // filling the new sim_proc data:
+  // - pid
   // - process duration
   // - IO request probability for each device
-  txt_sim_proc *sim_proc = &data->sim_procs[sim_pid];
+  txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
+  sim_proc->pid = pid;
+  sim_proc->proc_time = 0;
   printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid);
 }
 int plan_txt_get_sim_pid(simulation_plan *plan, int pid)
@@ -94,8 +100,8 @@ timeline_entry *find_entry(simulation_plan *plan, int time, int pid, int action_
 bool plan_txt_is_process_finished(simulation_plan *plan, int time, int pid)
 {
   timeline_entry *entry = find_entry(plan, time, pid, ACTION_END);
-  if (entry != 0)
-    return false;
+  if (entry == NULL)
+    return false; // ACTION_END not found at the given time
   return true;
 }
 void plan_txt_run_one_time_unit(simulation_plan *plan, int time, int pid)
@@ -108,7 +114,7 @@ void plan_txt_run_one_time_unit(simulation_plan *plan, int time, int pid)
 int plan_txt_request_io(simulation_plan *plan, int time, int pid)
 {
   timeline_entry *entry = find_entry(plan, time, pid, ACTION_IO);
-  if (entry != 0)
+  if (entry == NULL)
     return -1;
   return entry->device_id;
 }

@@ -40,12 +40,13 @@ int main()
   os *os = malloc(sizeof(os));
   os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
 
-  for (int itdev = 0;; itdev++)
+  for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)
   {
     sim_plan_device dev;
-    if (!plan->create_device(plan, itdev, &dev))
-      break;
-    device_init(os->devices + itdev, dev.name, dev.job_duration, dev.ret_queue, MAX_PROCESSES);
+    if (plan->create_device(plan, itdev, &dev))
+      device_init(os->devices + itdev, dev.name, dev.job_duration, dev.ret_queue, MAX_PROCESSES);
+    else
+      (os->devices + itdev)->is_connected = false;
   }
 
   scheduler *sch = os->scheduler;
@@ -105,7 +106,7 @@ int main()
     for (int it = 0; it < MAX_NUMBER_OF_DEVICES; it++)
     {
       device *device = os->devices + it;
-      if (device->current_job_end == time)
+      if (device->is_connected && device->current_job_end == time)
       {
         device->current_process->ready_since = time;
         process_queue *queue_to_ret_to = sch->queues + device->ret_queue;
@@ -152,8 +153,6 @@ int main()
     process *run = sch->current_process;
     if (run != 0)
     {
-      (*plan->run_one_time_unit)(plan, time, run->pid);
-
       // Does the process that's currently executing
       // want to do an IO operation at this time unit?
       int io_requested_device = (*plan->requires_io)(plan, time, run->pid);
@@ -170,6 +169,10 @@ int main()
         }
       }
     }
+
+    // increment running process internal duration
+    if (run != 0)
+      (*plan->run_one_time_unit)(plan, time, run->pid);
   }
 
   os_dispose(os);

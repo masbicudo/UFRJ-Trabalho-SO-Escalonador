@@ -44,6 +44,7 @@ typedef struct device
     process *current_process;     // current process using this device
     int current_job_end;          // (simulation) when the os will receive a signal indicating that the job is done
     int ret_queue;                // return queue for processes whose job on this device has finished
+    bool is_connected;            // returns whether device is connected
 } device;
 
 typedef struct os

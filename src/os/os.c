@@ -26,6 +26,7 @@ int device_init(device *device, char *name, int job_duration, int ret_queue, int
     device->current_process = 0;
     device->current_job_end = -1;
     device->ret_queue = ret_queue;
+    device->is_connected = true;
     // Initializing device blocked queue
     device->blocked_queue = malloc(sizeof(queue));
     pq_init(device->blocked_queue, proc_queue_size);
