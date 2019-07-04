@@ -15,6 +15,54 @@
 #define ACTION_END 2
 #define ACTION_IO 3
 
+void plan_txt_set_time(simulation_plan *plan, int time)
+{
+  if (time == 0)
+    return;
+
+  // checking for plan errors
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+
+  // looking for actions planed for the previous time
+  timeline_entry *entry = NULL;
+  while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
+  {
+    if (!entry->done && entry->time < time)
+    {
+      entry->done = true;
+      char *action_name;
+      if (entry->action == ACTION_NEW)
+        action_name = "new";
+      else if (entry->action == ACTION_END)
+        action_name = "end";
+      else if (entry->action == ACTION_IO)
+      {
+        device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
+        action_name = device->name;
+      }
+      printf("Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d", entry->time, action_name, entry->sim_pid);
+    }
+  }
+  while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
+  {
+    txt_sim_proc *sim_proc = data->sim_procs + entry->sim_pid;
+    if (!entry->done && entry->time < sim_proc->proc_time)
+    {
+      entry->done = true;
+      char *action_name;
+      if (entry->action == ACTION_NEW)
+        action_name = "new";
+      else if (entry->action == ACTION_END)
+        action_name = "end";
+      else if (entry->action == ACTION_IO)
+      {
+        device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
+        action_name = device->name;
+      }
+      printf("Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'", entry->sim_pid, entry->time, action_name);
+    }
+  }
+}
 int plan_txt_incoming_processes(simulation_plan *plan, int time)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
@@ -24,7 +72,7 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
   {
-    if (entry->time == time && entry->action == ACTION_NEW)
+    if (entry->time == time && !entry->done && entry->action == ACTION_NEW)
     {
       int sim_pid = data->sim_proc_count;
       if (entry->sim_pid == sim_pid)
@@ -33,6 +81,8 @@ int plan_txt_incoming_processes(simulation_plan *plan, int time)
         data->sim_proc_count++;
         txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
         memset(sim_proc, 0, sizeof(txt_sim_proc));
+
+        entry->done = true;
 
         // incrementing count
         count++;
@@ -69,6 +119,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
   sim_proc->pid = pid;
   sim_proc->proc_time = 0;
+  sim_proc->dead = false;
   printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid);
 }
 int plan_txt_get_sim_pid(simulation_plan *plan, int pid)
@@ -84,6 +135,12 @@ timeline_entry *find_entry(simulation_plan *plan, int time, int pid, int action_
   int sim_pid = plan_txt_get_sim_pid(plan, pid);
   txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
 
+  // no more entries shall be provided for dead processes
+  if (sim_proc->dead)
+    return 0;
+
+  // looking for actions planed for the given process,
+  // and searching for the desired action type
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
   {
@@ -95,6 +152,8 @@ timeline_entry *find_entry(simulation_plan *plan, int time, int pid, int action_
     if (entry->time == sim_proc->proc_time && entry->action == action_type && entry->sim_pid == sim_pid)
       return entry;
   }
+
+  // no actions found
   return 0;
 }
 bool plan_txt_is_process_finished(simulation_plan *plan, int time, int pid)
@@ -102,6 +161,16 @@ bool plan_txt_is_process_finished(simulation_plan *plan, int time, int pid)
   timeline_entry *entry = find_entry(plan, time, pid, ACTION_END);
   if (entry == NULL)
     return false; // ACTION_END not found at the given time
+
+  // when a finished process is found, we need to indicate that in the
+  // sim_proc structure too to avoid ERRORs from the txt plan,
+  // e.g. a dead process requesting IO
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+  int sim_pid = plan_txt_get_sim_pid(plan, pid);
+  txt_sim_proc *sim_proc = data->sim_procs + sim_pid;
+  sim_proc->dead = true;
+
+  entry->done = true;
   return true;
 }
 void plan_txt_run_one_time_unit(simulation_plan *plan, int time, int pid)
@@ -116,6 +185,7 @@ int plan_txt_request_io(simulation_plan *plan, int time, int pid)
   timeline_entry *entry = find_entry(plan, time, pid, ACTION_IO);
   if (entry == NULL)
     return -1;
+  entry->done = true;
   return entry->device_id;
 }
 int match_spaces(char *code)
@@ -144,36 +214,44 @@ int match_numbers(char *code, int *value)
 }
 bool read_char(char **code, char ch)
 {
-  if (**code != ch) return false;
+  if (**code != ch)
+    return false;
   (*code)++;
   return true;
 }
-bool read_string(char** code, const char* str) {
+bool read_string(char **code, const char *str)
+{
   int it = 0;
-  for (; str[it] != 0; it++) {
-    if (str[it] != (*code)[it]) return false;
+  for (; str[it] != 0; it++)
+  {
+    if (str[it] != (*code)[it])
+      return false;
   }
   (*code) += it;
   return true;
 }
-bool match_head(char *code, char* name, int* value)
+bool match_head(char *code, char *name, int *value)
 {
   int ret_value = 0;
   code += match_spaces(code);
-  if (!read_char(&code, '[')) return false;
+  if (!read_char(&code, '['))
+    return false;
   code += match_spaces(code);
-  if (!read_string(&code, name)) return false;
+  if (!read_string(&code, name))
+    return false;
   code += match_spaces(code);
   code += match_numbers(code, &ret_value);
   code += match_spaces(code);
-  if (!read_char(&code, ']')) return false;
-  if (value) *value = ret_value;
+  if (!read_char(&code, ']'))
+    return false;
+  if (value)
+    *value = ret_value;
   return true;
 }
-bool match_entry(char *code, int* num1, char** str2, int* str_len, int* num3, int* num4)
+bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, int *num4)
 {
   int ret_num1 = 0;
-  char* ret_str2 = 0;
+  char *ret_str2 = 0;
   int ret_num3 = 0;
   int ret_num4 = 0;
 
@@ -219,14 +297,18 @@ bool match_entry(char *code, int* num1, char** str2, int* str_len, int* num3, in
     code += num_len;
   }
 
-  if (num1 != NULL) *num1 = ret_num1;
+  if (num1 != NULL)
+    *num1 = ret_num1;
   if (str2 != NULL)
   {
     *str2 = ret_str2;
-    if (str_len != NULL) *str_len = ret_str_len;
+    if (str_len != NULL)
+      *str_len = ret_str_len;
   }
-  if (num3 != NULL) *num3 = ret_num3;
-  if (num4 != NULL) *num4 = ret_num4;
+  if (num3 != NULL)
+    *num3 = ret_num3;
+  if (num4 != NULL)
+    *num4 = ret_num4;
 
   return true;
 }
@@ -255,16 +337,18 @@ char *trim(char *line)
   l2[0] = '\0';
   return line;
 }
-void device_entry_dispose(void* ptr) {
-  device_entry* entry = (device_entry*)ptr;
+void device_entry_dispose(void *ptr)
+{
+  device_entry *entry = (device_entry *)ptr;
   free(entry->name);
 }
-bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_device* out) {
+bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_device *out)
+{
   txt_sim_data *data = (txt_sim_data *)plan->data;
   int len = utarray_len(data->devices);
   if (device_index >= 0 && device_index < len)
   {
-    device_entry* entry = (device_entry*)utarray_eltptr(data->devices, device_index);
+    device_entry *entry = (device_entry *)utarray_eltptr(data->devices, device_index);
     out->name = entry->name;
     out->job_duration = entry->duration;
     out->ret_queue = entry->return_queue;
@@ -301,7 +385,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   int mode = 0;
   int current_sim_pid = 0;
   int num1;
-  char* str2;
+  char *str2;
   int num3;
   int num4;
 
@@ -380,6 +464,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         entry.action = action_id;
         entry.device_id = device_id;
         entry.sim_pid = sim_pid;
+        entry.done = false;
         utarray_push_back(data->global_timeline, &entry);
       }
     }
@@ -427,6 +512,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         entry.action = action_id;
         entry.device_id = device_id;
         entry.sim_pid = current_sim_pid;
+        entry.done = false;
         utarray_push_back(data->proc_timeline, &entry);
       }
     }
@@ -449,6 +535,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   }
   fclose(fptr);
 
+  plan->set_time = &plan_txt_set_time;
   plan->incoming_processes = &plan_txt_incoming_processes;
   plan->create_process = &plan_txt_create_process;
   plan->is_process_finished = &plan_txt_is_process_finished;

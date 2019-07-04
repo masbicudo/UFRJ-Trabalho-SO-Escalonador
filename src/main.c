@@ -56,6 +56,9 @@ int main()
 
   for (int time = 0;; time++)
   {
+    if (plan->set_time != NULL)
+      (*plan->set_time)(plan, time);
+
     if (proc_count == MAX_PROCESSES)
       break;
 

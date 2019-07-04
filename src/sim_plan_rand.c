@@ -142,6 +142,7 @@ void plan_rand_init(
   data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
+  plan->set_time = NULL;
   plan->incoming_processes = &plan_rand_incoming_processes;
   plan->create_process = &plan_rand_create_process;
   plan->is_process_finished = &plan_rand_is_process_finished;

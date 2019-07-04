@@ -1,3 +1,13 @@
+# sections in this file:
+# [devices]
+#   used to connect devices to the OS
+# [timeline]
+#   global timeline actions
+#   time in this section are relative to the OS global time
+# [process N]
+#   where N is an spid number of a process created in the global timeline
+#   times in this section are relative to the running time of the process
+
 [ devices ] # this section must come before the others
 # name  duration  ret-queue
   disk  3         1
@@ -6,7 +16,7 @@
 
 [ timeline ]
 # abs.
-# time  action  id
+# time  action  spid
   0     new     0
   0     new     1
   1     disk    0

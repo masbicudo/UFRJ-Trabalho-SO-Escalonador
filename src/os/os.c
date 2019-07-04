@@ -63,7 +63,7 @@ void os_dispose(os *os)
 
 int enqueue_on_device(int time, device *device, process *process)
 {
-    if ((device->blocked_queue)->count == 0 && device->current_process == 0)
+    if ((device->blocked_queue)->count == 0 && device->current_process == NULL)
     {
         // There are no processes waiting to use the device and
         // no process is currently using the device, which means we can

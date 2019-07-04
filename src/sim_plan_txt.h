@@ -17,6 +17,8 @@ struct timeline_entry
   int action;
   int device_id;
   int sim_pid;
+
+  bool done; // indicates that this action was already requested by the simulation
 };
 struct device_entry
 {
@@ -42,6 +44,7 @@ struct txt_sim_proc
 {
   int pid;
   int proc_time;
+  bool dead;
 };
 
 void plan_txt_dispose(simulation_plan *plan);
