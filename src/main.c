@@ -7,6 +7,7 @@
 #include "sim_plan_rand.h"
 #include "sim_plan_txt.h"
 #include "ansi_console.h"
+#include "safe_alloc.h"
 
 #define COLORS_ALL
 #include "ansi_colors.h"
@@ -35,7 +36,7 @@ int main()
   log_val_f(PROB_NEW_PROC_CPU_BOUND, 23, "");
   log_val_i(MAX_NUMBER_OF_DEVICES, 23, "");
 
-  simulation_plan *plan = malloc(sizeof(simulation_plan));
+  simulation_plan *plan = safe_malloc(sizeof(simulation_plan), NULL);
   if (0)
   {
     // initialized a random execution plan
@@ -64,7 +65,7 @@ int main()
   printf("\n");
   printf($web_skyblue"Starting simulation:"$cdef"\n");
 
-  os *os = malloc(sizeof(os));
+  os *os = safe_malloc(sizeof(os), NULL);
   os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
 
   for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)
@@ -107,14 +108,15 @@ int main()
       if (proc_count <= MAX_PROCESSES)
       {
         proc_count++;
-        process *new_proc = malloc(sizeof(process));
+        process_queue* target_queue = os->scheduler->queues + 0;
+        process *new_proc = safe_malloc(sizeof(process), target_queue->items);
 
         int pid = os->next_pid++;
 
         (*plan->create_process)(plan, time, pid);
 
         process_init(new_proc, pid);
-        pq_enqueue(os->scheduler->queues + 0, new_proc);
+        pq_enqueue(target_queue, new_proc);
       }
     }
 
@@ -183,7 +185,7 @@ int main()
       if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
       {
         process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-        free(sch->current_process);            // disposing of used memory
+        safe_free(sch->current_process, sch);  // disposing of used memory
         sch->current_process = NULL;           // freeing cpu
         continue;
       }
@@ -234,8 +236,8 @@ int main()
   }
 
   os_dispose(os);
-  free(os);
+  safe_free(os, NULL);
 
   (*plan->dispose)(plan);
-  free(plan);
+  safe_free(plan, NULL);
 }

@@ -27,6 +27,9 @@
         "uthash.h": "c",
         "*.tcc": "c",
         "sstream": "c",
-        "ansi_console.h": "c"
+        "ansi_console.h": "c",
+        "safe_alloc.h": "c",
+        "initializer_list": "c",
+        "utility": "c"
     }
 }

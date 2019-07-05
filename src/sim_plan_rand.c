@@ -4,6 +4,7 @@
 #include "os.h"
 #include "sim_plan_rand.h"
 #include "rand_distributions.h"
+#include "safe_alloc.h"
 
 #define LOG_PROC_NEW "proc-new"
 #define LOG_PROC_END "proc-end"
@@ -121,10 +122,9 @@ void plan_rand_dispose(simulation_plan *plan)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
   map_dispose(&data->pid_map);
-  free(data->rng);
-  free(data->sim_procs);
-  free(plan->data);
-  free(plan);
+  safe_free(data->rng, data);
+  safe_free(data->sim_procs, data);
+  safe_free(plan->data, plan);
 }
 void plan_rand_init(
     simulation_plan *plan,
@@ -135,10 +135,6 @@ void plan_rand_init(
     float avg_proc_duration,
     float prob_new_proc_cpu_bound)
 {
-  // seeding the random number generator
-  pcg32_random_t *r = malloc(sizeof(pcg32_random_t));
-  pcg32_srandom_r(r, initstate, initseq); // 2 very large primes
-
   // the random simulation requires some data to run
   // - a pointer to the rng
   // - a list of simulated processes, each containing:
@@ -146,12 +142,17 @@ void plan_rand_init(
   //    - the duration of the process, tells when it will terminate
   //        (TODO: this should be determined at the moment, not in advance)
   //    - probability of IO requests for each device
-  rand_sim_data *data = malloc(sizeof(rand_sim_data));
+  rand_sim_data *data = safe_malloc(sizeof(rand_sim_data), plan);
+
+  // seeding the random number generator
+  pcg32_random_t *r = safe_malloc(sizeof(pcg32_random_t), data);
+  pcg32_srandom_r(r, initstate, initseq); // 2 very large primes
+
   plan->data = (void *)data;
   data->rng = r;
   data->sim_proc_capacity = max_sim_procs;
   data->sim_proc_count = 0;
-  data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
+  data->sim_procs = safe_malloc(max_sim_procs * sizeof(rand_sim_proc), data);
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
   plan->print_time_final_state = &plan_rand_print_time_final_state;

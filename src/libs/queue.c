@@ -2,17 +2,18 @@
 #include <string.h>
 #include "queue.h"
 #include "return_codes.h"
+#include "safe_alloc.h"
 
 int queue_init(queue* pq, int capacity) {
     pq->current = 0;
     pq->count = 0;
     pq->capacity = capacity;
-    pq->items = malloc(capacity*sizeof(void*));
+    pq->items = safe_malloc(capacity*sizeof(void*), pq);
     return OK;
 }
 
 void queue_dispose(queue* pq) {
-    free(pq->items);
+    safe_free(pq->items, pq);
 }
 
 int queue_enqueue(queue* pq, void* item) {

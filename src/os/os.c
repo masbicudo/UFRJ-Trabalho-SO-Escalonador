@@ -1,11 +1,12 @@
 #include <stdlib.h>
 #include "os.h"
 #include "return_codes.h"
+#include "safe_alloc.h"
 
 int scheduler_init(scheduler *scheduler, int queue_capacity, int queue_count)
 {
     scheduler->current_process = 0;
-    scheduler->queues = malloc(queue_count * sizeof(queue));
+    scheduler->queues = safe_malloc(queue_count * sizeof(queue), scheduler);
     scheduler->queue_count = queue_count;
     for (int it = 0; it < queue_count; it++)
         pq_init(scheduler->queues + it, queue_capacity);
@@ -16,7 +17,7 @@ void scheduler_dispose(scheduler *scheduler)
 {
     for (int it = 0; it < scheduler->queue_count; it++)
         pq_dispose(scheduler->queues + it);
-    free(scheduler->queues);
+    safe_free(scheduler->queues, scheduler);
 }
 
 int device_init(device *device, char *name, int job_duration, int ret_queue, int proc_queue_size)
@@ -28,7 +29,7 @@ int device_init(device *device, char *name, int job_duration, int ret_queue, int
     device->ret_queue = ret_queue;
     device->is_connected = true;
     // Initializing device blocked queue
-    device->blocked_queue = malloc(sizeof(queue));
+    device->blocked_queue = safe_malloc(sizeof(queue), device);
     pq_init(device->blocked_queue, proc_queue_size);
     return OK;
 }
@@ -36,16 +37,16 @@ int device_init(device *device, char *name, int job_duration, int ret_queue, int
 void device_dispose(device *device)
 {
     pq_dispose(device->blocked_queue);
-    free(device->blocked_queue);
+    safe_free(device->blocked_queue, device);
 }
 
 int os_init(os *os, int max_devices, int max_processes, int max_priority_level)
 {
     os->next_pid = 1;
-    os->devices = malloc(max_devices * sizeof(device));
+    os->devices = safe_malloc(max_devices * sizeof(device), os);
     os->max_processes = max_processes;
     map_init(&(os->pid_map), max_processes * 2, max_processes * 2 * 0.75, 2.0);
-    os->scheduler = malloc(sizeof(scheduler));
+    os->scheduler = safe_malloc(sizeof(scheduler), os);
     scheduler_init(os->scheduler, max_processes, max_priority_level);
     return OK;
 }
@@ -53,12 +54,12 @@ int os_init(os *os, int max_devices, int max_processes, int max_priority_level)
 void os_dispose(os *os)
 {
     scheduler_dispose(os->scheduler);
-    free(os->scheduler);
+    safe_free(os->scheduler, os);
     map_dispose(&(os->pid_map));
     device_dispose(os->devices + 2);
     device_dispose(os->devices + 1);
     device_dispose(os->devices + 0);
-    free(os->devices);
+    safe_free(os->devices, os);
 }
 
 int enqueue_on_device(int time, device *device, process *process)

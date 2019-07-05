@@ -2,12 +2,13 @@
 #include <string.h>
 #include "map.h"
 #include "return_codes.h"
+#include "safe_alloc.h"
 
 // https://en.wikipedia.org/wiki/Hash_table
 
 int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
     int size = capacity*sizeof(map_entry);
-    map_entry* list = malloc(size);
+    map_entry* list = safe_malloc(size, map);
     if (list == 0) return ERR_OUT_OF_MEMORY;
     memset(list, 0, size);
     map->list = list;
@@ -21,7 +22,7 @@ int map_init(map* map, int capacity, int growth_trigger, float growth_rate) {
 int map_grow(map* map) {
     int new_capacity = (int)(map->capacity * map->growth_rate);
     if (new_capacity <= map->capacity) new_capacity = map->capacity + 1;
-    map_entry* new_list = malloc(new_capacity*sizeof(map_entry));
+    map_entry* new_list = safe_malloc(new_capacity*sizeof(map_entry), map);
     memset(new_list, 0, new_capacity);
 
     // reinserting items
@@ -63,7 +64,7 @@ int map_grow(map* map) {
         }
     }
 
-    free(map->list);
+    safe_free(map->list, map);
     map->list = new_list;
     int new_growth_trigger = (int)(map->growth_trigger * map->growth_rate);
     if (new_growth_trigger <= map->growth_trigger) new_growth_trigger = map->growth_trigger + 1;
@@ -185,5 +186,5 @@ int map_info(map* map, char* out, int length) {
 }
 
 void map_dispose(map* map) {
-    free(map->list);
+    safe_free(map->list, map);
 }

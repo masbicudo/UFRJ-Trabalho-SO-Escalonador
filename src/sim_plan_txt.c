@@ -6,6 +6,7 @@
 #include "ansi_colors.h"
 #include "sim_plan_txt.h"
 #include "uthash.h"
+#include "safe_alloc.h"
 
 #include "config.h"
 
@@ -352,9 +353,8 @@ void plan_txt_dispose(simulation_plan *plan)
   utarray_free(data->proc_timeline);
 
   map_dispose(&data->pid_map);
-  free(data->sim_procs);
-  free(plan->data);
-  free(plan);
+  safe_free(data->sim_procs, data);
+  safe_free(plan->data, plan);
 }
 char *trim(char *line)
 {
@@ -371,7 +371,7 @@ char *trim(char *line)
 void device_entry_dispose(void *ptr)
 {
   device_entry *entry = (device_entry *)ptr;
-  free(entry->name);
+  safe_free(entry->name, entry);
 }
 bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_device *out)
 {
@@ -475,7 +475,7 @@ void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
 
   // printing CPU queues
   int queue_count = os->scheduler->queue_count;
-  str = malloc(sizeof(char) * cnt_chars + 1);
+  str = safe_malloc(sizeof(char) * cnt_chars + 1, NULL);
   str[cnt_chars] = 0;
   for (int itQ = 0; itQ < queue_count; itQ++)
   {
@@ -513,11 +513,11 @@ void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
       printf("%*s", cnt_chars, str);
     }
   }
-  free(str);
+  safe_free(str, NULL);
   printf(" ");
 
   // printing device queues
-  str = malloc(sizeof(char) * cnt_chars + 1);
+  str = safe_malloc(sizeof(char) * cnt_chars + 1, NULL);
   str[cnt_chars] = 0;
   for (int itD = 0; itD < MAX_NUMBER_OF_DEVICES; itD++)
   {
@@ -571,7 +571,7 @@ void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
       }
     }
   }
-  free(str);
+  safe_free(str, NULL);
 
   // printing line end
   printf("\n");
@@ -580,11 +580,11 @@ UT_icd device_entry_ptr_icd = {sizeof(device_entry), 0, 0, device_entry_dispose}
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 {
-  txt_sim_data *data = malloc(sizeof(txt_sim_data));
+  txt_sim_data *data = safe_malloc(sizeof(txt_sim_data), plan);
   plan->data = (void *)data;
   data->sim_proc_capacity = max_sim_procs;
   data->sim_proc_count = 0;
-  data->sim_procs = malloc(max_sim_procs * sizeof(txt_sim_proc));
+  data->sim_procs = safe_malloc(max_sim_procs * sizeof(txt_sim_proc), data);
   data->time_slice = 4; // default time_slice is 4
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
@@ -625,18 +625,19 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
     int str_len;
     if (mode == 1 && match_entry(line, 0, &str2, &str_len, &num3, &num4))
     {
-      char *str_new = malloc(str_len + 1);
-      strncpy(str_new, str2, str_len);
-      str_new[str_len] = 0;
-
-      // creating the device entry, and then adding to the array
       if (num3 >= 0 && num4 >= 0)
       {
-        device_entry entry;
-        entry.name = str_new;
-        entry.duration = num3;
-        entry.return_queue = num4;
-        utarray_push_back(data->devices, &entry);
+        utarray_extend_back(data->devices);
+        device_entry* entry = (device_entry*)utarray_back(data->devices);
+
+        char *str_new = safe_malloc(str_len + 1, entry);
+        strncpy(str_new, str2, str_len);
+        str_new[str_len] = 0;
+
+        // creating the device entry, and then adding to the array
+        entry->name = str_new;
+        entry->duration = num3;
+        entry->return_queue = num4;
       }
     }
     else if (mode == 2 && match_entry(line, &num1, &str2, &str_len, &num3, 0))
@@ -644,7 +645,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       // 1
       int time = num1;
       // 2
-      char *str_new = malloc(str_len + 1);
+      char *str_new = safe_malloc(str_len + 1, NULL);
       strncpy(str_new, str2, str_len);
       str_new[str_len] = 0;
       // 3
@@ -675,7 +676,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
           }
         }
       }
-      free(str_new);
+      safe_free(str_new, NULL);
 
       // creating the timeline entry, and then adding to the array
       if (time >= 0 && action_id >= 0 && device_id >= 0 && sim_pid >= 0)
@@ -694,7 +695,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       // 1
       int time = num1;
       // 2
-      char *str_new = malloc(str_len + 1);
+      char *str_new = safe_malloc(str_len + 1, NULL);
       strncpy(str_new, str2, str_len);
       str_new[str_len] = 0;
 
@@ -723,7 +724,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
           }
         }
       }
-      free(str_new);
+      safe_free(str_new, NULL);
 
       // creating the timeline entry, and then adding to the array
       if (time >= 0 && action_id >= 0 && device_id >= 0 && current_sim_pid >= 0)
@@ -739,14 +740,14 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
     }
     else if (mode == 10 && match_entry(line, 0, &str2, &str_len, &num3, 0))
     {
-      char *str_new = malloc(str_len + 1);
+      char *str_new = safe_malloc(str_len + 1, NULL);
       strncpy(str_new, str2, str_len);
       str_new[str_len] = 0;
 
       if (strcmp("time_slice", str_new) == 0)
         data->time_slice = num3;
 
-      free(str_new);
+      safe_free(str_new, NULL);
     }
     else if (trimmed[0] == '\0')
     {
