@@ -35,9 +35,10 @@
   0     new       1
   1     disk    0
   8     new         2
-  10    print     1     # this is an ERROR, id 1 will be preempted at time=9
+  10    print     1     # this print will conflict with process 2 trying to print
   11    new           3
   12    end     0
+  49    new     4
 
 [ process 2 ]
 # rel.
@@ -62,3 +63,6 @@
   # the main [timeline] section
   13   sleep
   14   end
+
+[ process 4 ]
+  2 end
