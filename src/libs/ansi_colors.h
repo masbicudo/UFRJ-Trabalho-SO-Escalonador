@@ -484,7 +484,7 @@
 
 // Web Colors
 
-#ifdef COLORS_WEBRED
+#ifdef COLORS_WEB_RED
 // Red colors
 #define $web_lightsalmon "\033[38;2;255;160;122m"
 #define $web_salmon "\033[38;2;250;128;114m"
@@ -497,7 +497,7 @@
 #define $web_darkred "\033[38;2;139;0;0m"
 #endif
 
-#ifdef COLORS_WEBORANGE
+#ifdef COLORS_WEB_ORANGE
 // Orange colors
 #define $web_coral "\033[38;2;255;127;80m"
 #define $web_tomato "\033[38;2;255;99;71m"
@@ -507,7 +507,7 @@
 #define $web_darkorange "\033[38;2;255;140;0m"
 #endif
 
-#ifdef COLORS_WEBYELLOW
+#ifdef COLORS_WEB_YELLOW
 // Yellow colors
 #define $web_lightyellow "\033[38;2;255;255;224m"
 #define $web_lemonchiffon "\033[38;2;255;250;205m"
@@ -521,7 +521,7 @@
 #define $web_yellow "\033[38;2;255;255;0m"
 #endif
 
-#ifdef COLORS_WEBGREEN
+#ifdef COLORS_WEB_GREEN
 // Green colors
 #define $web_lawngreen "\033[38;2;124;252;0m"
 #define $web_chartreuse "\033[38;2;127;255;0m"
@@ -544,7 +544,7 @@
 #define $web_olivedrab "\033[38;2;107;142;35m"
 #endif
 
-#ifdef COLORS_WEBCYAN
+#ifdef COLORS_WEB_CYAN
 // Cyan colors
 #define $web_lightcyan "\033[38;2;224;255;255m"
 #define $web_cyan "\033[38;2;0;255;255m"
@@ -561,7 +561,7 @@
 #define $web_teal "\033[38;2;0;128;128m"
 #endif
 
-#ifdef COLORS_WEBBLUE
+#ifdef COLORS_WEB_BLUE
 // Blue colors
 #define $web_powderblue "\033[38;2;176;224;230m"
 #define $web_lightblue "\033[38;2;173;216;230m"
@@ -583,7 +583,7 @@
 #define $web_darkslateblue "\033[38;2;72;61;139m"
 #endif
 
-#ifdef COLORS_WEBPURPLE
+#ifdef COLORS_WEB_PURPLE
 // Purple colors
 #define $web_lavender "\033[38;2;230;230;250m"
 #define $web_thistle "\033[38;2;216;191;216m"
@@ -602,7 +602,7 @@
 #define $web_indigo "\033[38;2;75;0;130m"
 #endif
 
-#ifdef COLORS_WEBPINK
+#ifdef COLORS_WEB_PINK
 // Pink colors
 #define $web_pink "\033[38;2;255;192;203m"
 #define $web_lightpink "\033[38;2;255;182;193m"
@@ -612,7 +612,7 @@
 #define $web_mediumvioletred "\033[38;2;199;21;133m"
 #endif
 
-#ifdef COLORS_WEBWHITE
+#ifdef COLORS_WEB_WHITE
 // White colors
 #define $web_white "\033[38;2;255;255;255m"
 #define $web_snow "\033[38;2;255;250;250m"
@@ -633,7 +633,7 @@
 #define $web_mistyrose "\033[38;2;255;228;225m"
 #endif
 
-#ifdef COLORS_WEBGRAY
+#ifdef COLORS_WEB_GRAY
 // Gray colors
 #define $web_gainsboro "\033[38;2;220;220;220m"
 #define $web_lightgray "\033[38;2;211;211;211m"
@@ -647,7 +647,7 @@
 #define $web_black "\033[38;2;0;0;0m"
 #endif
 
-#ifdef COLORS_WEBBROWN
+#ifdef COLORS_WEB_BROWN
 // Brown colors
 #define $web_cornsilk "\033[38;2;255;248;220m"
 #define $web_blanchedalmond "\033[38;2;255;235;205m"
