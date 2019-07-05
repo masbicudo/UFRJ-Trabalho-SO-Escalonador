@@ -109,6 +109,10 @@ bool plan_rand_create_device(simulation_plan *plan, int device_index, sim_plan_d
   }
   return device_index >= 0 && device_index < 3;
 }
+void plan_rand_get_os_settings(simulation_plan *plan, plan_os_settings *out)
+{
+  out->time_slice = 4;
+}
 void plan_rand_dispose(simulation_plan *plan)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
@@ -146,6 +150,7 @@ void plan_rand_init(
   data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
+  plan->get_os_settings = &plan_rand_get_os_settings;
   plan->set_time = NULL;
   plan->incoming_processes = &plan_rand_incoming_processes;
   plan->create_process = &plan_rand_create_process;

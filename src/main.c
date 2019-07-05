@@ -9,7 +9,7 @@
 #include "ansi_console.h"
 
 #define MAX_PROCESSES 10 // maximum number of processes that will be created by the simulation
-#define MAX_TIME_SLICE 4
+#define MAX_TIME_SLICE 10 // this is the maximum time-slice allowed, even if the simulation-plan asks for more
 #define MAX_PRIORITY_LEVEL 2
 #define PROB_NEW_PROCESS 0.1
 #define AVG_PROC_DURATION 10.0
@@ -40,6 +40,10 @@ int main()
   {
     plan_txt_init(plan, "plans/one_proc_test_plan.txt", MAX_PROCESSES);
   }
+
+  plan_os_settings conf;
+  (*plan->get_os_settings)(plan, &conf);
+  int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
 
   os *os = malloc(sizeof(os));
   os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
@@ -116,7 +120,7 @@ int main()
       {
         if (select_next_process(sch, &(sch->current_process)) == OK)
         {
-          sch->time_slice_end = time + MAX_TIME_SLICE;
+          sch->time_slice_end = time + time_slice;
         }
         else
         {

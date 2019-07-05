@@ -38,6 +38,8 @@ struct txt_sim_data
   UT_array *global_timeline;
   UT_array *proc_timeline;
   UT_array *devices;
+
+  int time_slice;
 };
 
 struct txt_sim_proc

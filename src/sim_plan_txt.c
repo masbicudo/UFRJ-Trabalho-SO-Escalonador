@@ -356,6 +356,11 @@ bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_de
   }
   return false;
 }
+void plan_txt_get_os_settings(simulation_plan *plan, plan_os_settings *out)
+{
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+  out->time_slice = data->time_slice;
+}
 UT_icd device_entry_ptr_icd = {sizeof(device_entry), 0, 0, device_entry_dispose};
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
@@ -365,6 +370,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   data->sim_proc_capacity = max_sim_procs;
   data->sim_proc_count = 0;
   data->sim_procs = malloc(max_sim_procs * sizeof(txt_sim_proc));
+  data->time_slice = 4; // default time_slice is 4
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
   // we are going to read all the txt file at
@@ -516,6 +522,17 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         utarray_push_back(data->proc_timeline, &entry);
       }
     }
+    else if (mode == 10 && match_entry(line, 0, &str2, &str_len, &num3, 0))
+    {
+      char *str_new = malloc(str_len + 1);
+      strncpy(str_new, str2, str_len);
+      str_new[str_len] = 0;
+
+      if (strcmp("time_slice", str_new) == 0)
+        data->time_slice = num3;
+
+      free(str_new);
+    }
     else if (trimmed[0] == '\0')
     {
       // empty line
@@ -532,9 +549,14 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
     {
       mode = 3;
     }
+    else if (match_head(trimmed, "os", &current_sim_pid))
+    {
+      mode = 10;
+    }
   }
   fclose(fptr);
 
+  plan->get_os_settings = &plan_txt_get_os_settings;
   plan->set_time = &plan_txt_set_time;
   plan->incoming_processes = &plan_txt_incoming_processes;
   plan->create_process = &plan_txt_create_process;
