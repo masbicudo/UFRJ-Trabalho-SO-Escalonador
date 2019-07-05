@@ -8,12 +8,13 @@
 typedef struct rand_sim_data rand_sim_data;
 typedef struct rand_sim_proc rand_sim_proc;
 
-struct rand_sim_data {
+struct rand_sim_data
+{
   pcg32_random_t *rng;
-  
+
   int sim_proc_count;
   int sim_proc_capacity;
-  rand_sim_proc* sim_procs;
+  rand_sim_proc *sim_procs;
 
   map pid_map;
 
@@ -31,8 +32,7 @@ void plan_rand_init(
     int max_sim_procs,
     float prob_new_process,
     float avg_proc_duration,
-    float prob_new_proc_cpu_bound
-);
+    float prob_new_proc_cpu_bound);
 
 struct rand_sim_proc
 {

@@ -14,7 +14,7 @@ typedef void sim_plan_create_process(simulation_plan *plan, int time, int pid);
 typedef bool sim_plan_is_process_finished(simulation_plan *plan, int time, int pid);
 typedef void sim_plan_run_one_time_unit(simulation_plan *plan, int time, int pid);
 typedef int sim_plan_requires_io(simulation_plan *plan, int time, int pid);
-typedef bool sim_plan_create_device(simulation_plan *plan, int device_index, sim_plan_device* out);
+typedef bool sim_plan_create_device(simulation_plan *plan, int device_index, sim_plan_device *out);
 typedef void sim_plan_dispose(simulation_plan *plan);
 
 struct simulation_plan
@@ -30,8 +30,9 @@ struct simulation_plan
   sim_plan_dispose *dispose;
 };
 
-struct sim_plan_device {
-  char* name;
+struct sim_plan_device
+{
+  char *name;
   int job_duration;
   int ret_queue;
 };

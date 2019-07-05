@@ -87,18 +87,22 @@ int plan_rand_request_io(simulation_plan *plan, int time, int pid)
     return 2;
   return -1;
 }
-bool plan_rand_create_device(simulation_plan *plan, int device_index, sim_plan_device* out) {
-  if (device_index == 0) {
+bool plan_rand_create_device(simulation_plan *plan, int device_index, sim_plan_device *out)
+{
+  if (device_index == 0)
+  {
     out->name = "disk";
     out->job_duration = 3;
     out->ret_queue = 1;
   }
-  if (device_index == 1) {
+  if (device_index == 1)
+  {
     out->name = "tape";
     out->job_duration = 8;
     out->ret_queue = 0;
   }
-  if (device_index == 2) {
+  if (device_index == 2)
+  {
     out->name = "print";
     out->job_duration = 15;
     out->ret_queue = 0;

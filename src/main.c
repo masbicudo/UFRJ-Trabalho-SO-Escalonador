@@ -109,7 +109,8 @@ int main()
       max_wait_time = clamp(max_wait_time, 1, INT32_MAX / 8) * 8;
     }
 
-    while (1) {
+    while (1)
+    {
       // # Selecting the next process if cpu is available.
       if (sch->current_process == NULL)
       {
@@ -117,7 +118,8 @@ int main()
         {
           sch->time_slice_end = time + MAX_TIME_SLICE;
         }
-        else {
+        else
+        {
           // if a process was not found we set the running process to NULL
           sch->current_process = NULL;
         }
@@ -152,7 +154,7 @@ int main()
       {
         process_dispose(sch->current_process); // asking the process to dispose it's owned resources
         free(sch->current_process);            // disposing of used memory
-        sch->current_process = NULL;              // freeing cpu
+        sch->current_process = NULL;           // freeing cpu
         continue;
       }
 
