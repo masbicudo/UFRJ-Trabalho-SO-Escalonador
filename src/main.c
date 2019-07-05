@@ -11,15 +11,7 @@
 #define COLORS_ALL
 #include "ansi_colors.h"
 
-#define MAX_PROCESSES 10 // maximum number of processes that will be created by the simulation
-#define MAX_TIME_SLICE 10 // this is the maximum time-slice allowed, even if the simulation-plan asks for more
-#define MAX_PRIORITY_LEVEL 2
-#define PROB_NEW_PROCESS 0.1
-#define AVG_PROC_DURATION 10.0
-#define PROB_NEW_PROC_CPU_BOUND 0.5
-
-// don't change the following consts
-#define MAX_NUMBER_OF_DEVICES 10
+#include "config.h"
 
 #define log_val_i(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%2d   "$green" %s"$cdef"\n", #key, key, comment))
 #define log_val_f(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%5.2f" $green" %s"$cdef"\n", #key, key, comment))
@@ -84,6 +76,10 @@ int main()
       (os->devices + itdev)->is_connected = false;
   }
 
+  // allowing the sim plan to print something before starting
+  // this is used to show the headers of the info that will be printed
+  (*plan->print_time_final_state)(plan, -1, os);
+
   scheduler *sch = os->scheduler;
 
   // TODO: initialize processes randomly
@@ -93,7 +89,8 @@ int main()
   {
     // telling the current time to the simulation plan
     if (plan->set_time != NULL)
-      (*plan->set_time)(plan, time);
+      if (!(*plan->set_time)(plan, time, os))
+        break;
 
     // no more processes can be created because
     // we already created the maximum number of processes
@@ -145,20 +142,6 @@ int main()
 
     while (1)
     {
-      // # Selecting the next process if cpu is available.
-      if (sch->current_process == NULL)
-      {
-        if (select_next_process(sch, &(sch->current_process)) == OK)
-        {
-          sch->time_slice_end = time + time_slice;
-        }
-        else
-        {
-          // if a process was not found we set the running process to NULL
-          sch->current_process = NULL;
-        }
-      }
-
       // # Checking devices for finished jobs.
       // This must be inside the loop, because
       // there are immediate devices that don't
@@ -173,13 +156,26 @@ int main()
           process_queue *queue_to_ret_to = sch->queues + device->ret_queue;
           if (pq_enqueue(queue_to_ret_to, device->current_process) == OK)
           {
-            device->current_process = NULL;
             // checking whether there is a process waiting for the device and set it as the current
             if (pq_dequeue(device->blocked_queue, &(device->current_process)) == OK)
-            {
               device->current_job_end = time + device->job_duration;
-            }
+            else
+              device->current_process = NULL;
           }
+        }
+      }
+
+      // # Selecting the next process if CPU is available.
+      if (sch->current_process == NULL)
+      {
+        if (select_next_process(sch, &(sch->current_process)) == OK)
+        {
+          sch->time_slice_end = time + time_slice;
+        }
+        else
+        {
+          // if a process was not found we set the running process to NULL
+          sch->current_process = NULL;
         }
       }
 
@@ -212,19 +208,29 @@ int main()
         if (io_requested_device >= 0)
         {
           // moving current process to the device wait queue
-          enqueue_on_device(time, os->devices + io_requested_device, sch->current_process);
+          device* target_device = os->devices + io_requested_device;
+          enqueue_on_device(time, target_device, sch->current_process);
           sch->current_process = NULL;
           continue;
         }
       }
 
-      // # Running the current process.
-      // increment running process internal duration
-      if (sch->current_process != NULL)
-        (*plan->run_one_time_unit)(plan, time, sch->current_process->pid);
-
       break;
     }
+
+    // # Running the current process.
+    // increment running process internal duration
+    if (sch->current_process != NULL)
+    {
+      (*plan->run_one_time_unit)(plan, time, sch->current_process->pid);
+    }
+
+    // writing current state to the console
+    if (time % 2)
+      printf($web_steelblue);
+    else
+      printf($white);
+    (*plan->print_time_final_state)(plan, time, os);
   }
 
   os_dispose(os);

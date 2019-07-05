@@ -9,8 +9,9 @@ typedef struct simulation_entry_type simulation_entry_type;
 typedef struct sim_plan_device sim_plan_device;
 typedef struct plan_os_settings plan_os_settings;
 
+typedef void sim_plan_print_time_final_state(simulation_plan *plan, int time, os *os);
 typedef void sim_plan_get_os_settings(simulation_plan *plan, plan_os_settings *out);
-typedef void sim_plan_set_time(simulation_plan *plan, int time);
+typedef bool sim_plan_set_time(simulation_plan *plan, int time, os* os);
 typedef int sim_plan_incoming_processes(simulation_plan *plan, int time);
 typedef void sim_plan_create_process(simulation_plan *plan, int time, int pid);
 typedef bool sim_plan_is_process_finished(simulation_plan *plan, int time, int pid);
@@ -31,6 +32,7 @@ struct simulation_plan
   sim_plan_requires_io *requires_io;
   sim_plan_create_device *create_device;
   sim_plan_dispose *dispose;
+  sim_plan_print_time_final_state *print_time_final_state;
 };
 
 struct sim_plan_device

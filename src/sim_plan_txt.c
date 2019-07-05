@@ -1,10 +1,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include "os.h"
+#include "ansi_console.h"
+#include "ansi_colors.h"
+#include "sim_plan_txt.h"
 #include "uthash.h"
 
-#include "sim_plan_txt.h"
+#include "config.h"
 
 #define LOG_PROC_NEW "proc-new"
 #define LOG_PROC_END "proc-end"
@@ -15,53 +18,65 @@
 #define ACTION_END 2
 #define ACTION_IO 3
 
-void plan_txt_set_time(simulation_plan *plan, int time)
+bool plan_txt_set_time(simulation_plan *plan, int time, os* os)
 {
-  if (time == 0)
-    return;
-
   // checking for plan errors
   txt_sim_data *data = (txt_sim_data *)plan->data;
 
-  // looking for actions planed for the previous time
+  if (time > 0)
+  {
+    // looking for actions planed for the previous time
+    timeline_entry *entry = NULL;
+    while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
+    {
+      if (!entry->done && entry->time < time)
+      {
+        entry->done = true;
+        char *action_name;
+        if (entry->action == ACTION_NEW)
+          action_name = "new";
+        else if (entry->action == ACTION_END)
+          action_name = "end";
+        else if (entry->action == ACTION_IO)
+        {
+          device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
+          action_name = device->name;
+        }
+        printf("Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d", entry->time, action_name, entry->sim_pid);
+      }
+    }
+    while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
+    {
+      txt_sim_proc *sim_proc = data->sim_procs + entry->sim_pid;
+      if (!entry->done && entry->time < sim_proc->proc_time)
+      {
+        entry->done = true;
+        char *action_name;
+        if (entry->action == ACTION_NEW)
+          action_name = "new";
+        else if (entry->action == ACTION_END)
+          action_name = "end";
+        else if (entry->action == ACTION_IO)
+        {
+          device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
+          action_name = device->name;
+        }
+        printf("Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'", entry->sim_pid, entry->time, action_name);
+      }
+    }
+  }
+
+  // checking if simulation can continue at the current state and time
+  // - no new processes will be created
+  // - all created processes are dead
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
-  {
-    if (!entry->done && entry->time < time)
-    {
-      entry->done = true;
-      char *action_name;
-      if (entry->action == ACTION_NEW)
-        action_name = "new";
-      else if (entry->action == ACTION_END)
-        action_name = "end";
-      else if (entry->action == ACTION_IO)
-      {
-        device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
-        action_name = device->name;
-      }
-      printf("Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d", entry->time, action_name, entry->sim_pid);
-    }
-  }
-  while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
-  {
-    txt_sim_proc *sim_proc = data->sim_procs + entry->sim_pid;
-    if (!entry->done && entry->time < sim_proc->proc_time)
-    {
-      entry->done = true;
-      char *action_name;
-      if (entry->action == ACTION_NEW)
-        action_name = "new";
-      else if (entry->action == ACTION_END)
-        action_name = "end";
-      else if (entry->action == ACTION_IO)
-      {
-        device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
-        action_name = device->name;
-      }
-      printf("Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'", entry->sim_pid, entry->time, action_name);
-    }
-  }
+    if (entry->action == ACTION_NEW && !entry->done)
+      return true;
+  for (int itP = 0; itP < data->sim_proc_count; itP++)
+    if (!data->sim_procs[itP].dead)
+      return true;
+  return false;
 }
 int plan_txt_incoming_processes(simulation_plan *plan, int time)
 {
@@ -120,7 +135,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   sim_proc->pid = pid;
   sim_proc->proc_time = 0;
   sim_proc->dead = false;
-  printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid);
+  // TODO: printf("t=%4d %s  pid=%2d  duration=%2d  disk=%f  tape=%f  printer=%f\n", time, LOG_PROC_NEW, pid);
 }
 int plan_txt_get_sim_pid(simulation_plan *plan, int pid)
 {
@@ -144,17 +159,33 @@ timeline_entry *find_entry(simulation_plan *plan, int time, int pid, int action_
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
   {
-    if (entry->time == time && entry->action == action_type && entry->sim_pid == sim_pid)
+    if (entry->time == time && entry->action == action_type && entry->sim_pid == sim_pid && !entry->done)
       return entry;
   }
   while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
   {
-    if (entry->time == sim_proc->proc_time && entry->action == action_type && entry->sim_pid == sim_pid)
+    if (entry->time == sim_proc->proc_time && entry->action == action_type && entry->sim_pid == sim_pid && !entry->done)
       return entry;
   }
 
   // no actions found
   return 0;
+}
+int count_entries(simulation_plan *plan, int action_type)
+{
+  int result = 0;
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+  timeline_entry *entry = NULL;
+
+  while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
+    if (entry->action == action_type)
+      result++;
+
+  while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
+    if (entry->action == action_type)
+      result++;
+
+  return result;
 }
 bool plan_txt_is_process_finished(simulation_plan *plan, int time, int pid)
 {
@@ -361,6 +392,190 @@ void plan_txt_get_os_settings(simulation_plan *plan, plan_os_settings *out)
   txt_sim_data *data = (txt_sim_data *)plan->data;
   out->time_slice = data->time_slice;
 }
+void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
+{
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+
+  // printing time
+  if (time < 0)
+    printf("time");
+  else
+    printf("%4d", time);
+  printf(" ");
+
+  // printing running process
+  printf(" ");
+  if (time < 0)
+  {
+    printf(" r");
+  }
+  else
+  {
+    if (os->scheduler->current_process != NULL)
+    {
+      int sim_pid;
+      map_get(&data->pid_map, os->scheduler->current_process->pid, &sim_pid);
+      if (!(0 <= sim_pid && sim_pid < 100))
+      {
+        printf($red "Error! sim_pid cannot be greater or equal to 100" $cdef);
+        exit(1);
+      }
+      printf("%2d", sim_pid);
+    }
+    else
+    {
+      printf("  ");
+    }
+  }
+  printf(" ");
+
+  // printing processes
+  int max_proc_count = count_entries(plan, ACTION_NEW);
+  for (int itP = 0; itP < max_proc_count; itP++)
+  {
+    printf(" ");
+    if (time < 0)
+    {
+      char pname[4];
+      memset(pname, 0, 4);
+      snprintf(pname, 3, "p%d", itP);
+      printf("%3s", pname);
+    }
+    else
+    {
+      if (itP < data->sim_proc_count)
+      {
+        txt_sim_proc *sim_proc = data->sim_procs + itP;
+        if (sim_proc->dead)
+        {
+          printf("  x");
+        }
+        else
+        {
+          printf("%3d", sim_proc->proc_time);
+        }
+      }
+      else
+      {
+        printf("   ");
+      }
+    }
+  }
+  printf(" ");
+
+  char *str;
+  int cnt_chars = 0;
+  for (int itC = 0; itC < max_proc_count; itC++)
+  {
+    // NOTE: this works given that there will be no more than 100 processes in total
+    // - it takes into account the number of digits needed to print the spid
+    // - it takes into account the '>' that separates each spid
+    cnt_chars += (itC < 10 ? 1 : 2) + (itC ? 1 : 0);
+  }
+
+  // printing CPU queues
+  int queue_count = os->scheduler->queue_count;
+  str = malloc(sizeof(char) * cnt_chars + 1);
+  str[cnt_chars] = 0;
+  for (int itQ = 0; itQ < queue_count; itQ++)
+  {
+    printf(" ");
+    if (time < 0)
+    {
+      char qname[4];
+      memset(qname, 0, 4);
+      snprintf(qname, 3, "q%d", itQ);
+      printf("%*s", cnt_chars, qname);
+    }
+    else
+    {
+      char *str2 = str;
+      process_queue *queue = os->scheduler->queues + itQ;
+      for (int index = 0; index < queue->count; index++)
+      {
+        int inv_idx = queue->count - index - 1;
+        if (index > 0)
+          (str2++)[0] = '>';
+        process *proc;
+        pq_get(queue, inv_idx, &proc);
+        int sim_pid;
+        map_get(&data->pid_map, proc->pid, &sim_pid);
+        if (!(0 <= sim_pid && sim_pid < 100))
+        {
+          printf($red "Error! sim_pid cannot be greater or equal to 100" $cdef);
+          exit(1);
+        }
+        int sz = snprintf(NULL, 0, "%d", sim_pid);
+        snprintf(str2, sz, "%d", sim_pid);
+        str2 += sz;
+      }
+      str2[0] = 0;
+      printf("%*s", cnt_chars, str);
+    }
+  }
+  free(str);
+  printf(" ");
+
+  // printing device queues
+  str = malloc(sizeof(char) * cnt_chars + 1);
+  str[cnt_chars] = 0;
+  for (int itD = 0; itD < MAX_NUMBER_OF_DEVICES; itD++)
+  {
+    if (!os->devices[itD].is_connected)
+      continue;
+
+    printf(" ");
+    if (time < 0)
+    {
+      printf("%*s", cnt_chars, os->devices[itD].name);
+      printf(" ");
+      printf("cp");
+    }
+    else
+    {
+      char *str2 = str;
+      device *device = os->devices + itD;
+      process_queue *queue = device->blocked_queue;
+      for (int index = 0; index < queue->count; index++)
+      {
+        int inv_idx = queue->count - index - 1;
+        if (index > 0)
+          (str2++)[0] = '>';
+        process *proc;
+        pq_get(queue, inv_idx, &proc);
+        int sim_pid;
+        map_get(&data->pid_map, proc->pid, &sim_pid);
+        if (!(0 <= sim_pid && sim_pid < 100))
+        {
+          printf($red "Error! sim_pid cannot be greater or equal to 100" $cdef);
+          exit(1);
+        }
+        int sz = snprintf(NULL, 0, "%d", sim_pid);
+        snprintf(str2, sz, "%d", sim_pid);
+        str2 += sz;
+      }
+      str2[0] = 0;
+      printf("%*s", cnt_chars, str);
+
+      // printing processes currently using device
+      printf(" ");
+      if (device->current_process != NULL)
+      {
+        int sim_pid;
+        map_get(&data->pid_map, device->current_process->pid, &sim_pid);
+        printf("%2d", sim_pid);
+      }
+      else
+      {
+        printf("  ");
+      }
+    }
+  }
+  free(str);
+
+  // printing line end
+  printf("\n");
+}
 UT_icd device_entry_ptr_icd = {sizeof(device_entry), 0, 0, device_entry_dispose};
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
@@ -556,6 +771,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   }
   fclose(fptr);
 
+  plan->print_time_final_state = &plan_txt_print_time_final_state;
   plan->get_os_settings = &plan_txt_get_os_settings;
   plan->set_time = &plan_txt_set_time;
   plan->incoming_processes = &plan_txt_incoming_processes;

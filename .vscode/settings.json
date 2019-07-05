@@ -26,6 +26,7 @@
         "regex.h": "c",
         "uthash.h": "c",
         "*.tcc": "c",
-        "sstream": "c"
+        "sstream": "c",
+        "ansi_console.h": "c"
     }
 }

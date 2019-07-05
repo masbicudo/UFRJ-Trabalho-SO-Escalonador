@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "os.h"
 #include "sim_plan_rand.h"
 #include "rand_distributions.h"
 
@@ -113,6 +114,9 @@ void plan_rand_get_os_settings(simulation_plan *plan, plan_os_settings *out)
 {
   out->time_slice = 4;
 }
+void plan_rand_print_time_final_state(simulation_plan *plan, int time, os *os)
+{
+}
 void plan_rand_dispose(simulation_plan *plan)
 {
   rand_sim_data *data = (rand_sim_data *)plan->data;
@@ -150,6 +154,7 @@ void plan_rand_init(
   data->sim_procs = malloc(max_sim_procs * sizeof(rand_sim_proc));
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
 
+  plan->print_time_final_state = &plan_rand_print_time_final_state;
   plan->get_os_settings = &plan_rand_get_os_settings;
   plan->set_time = NULL;
   plan->incoming_processes = &plan_rand_incoming_processes;
