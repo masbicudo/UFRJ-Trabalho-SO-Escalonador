@@ -10,6 +10,9 @@
 #   where N is an spid number of a process created in the global timeline
 #   times in this section are relative to the running time of the process
 
+[ os ]
+  time_slice  4
+
 [ devices ] # this section must come before the others
 # name  duration  ret-queue
   disk  3         1
@@ -29,11 +32,11 @@
 # abs.
 # time  action  spid
   0     new     0
-  0     new     1
+  0     new       1
   1     disk    0
-  8     new     2
-  10    print   1 # this is an ERROR, id 1 will be preempted at time=9
-  11    new     3
+  8     new         2
+  10    print     1     # this is an ERROR, id 1 will be preempted at time=9
+  11    new           3
   12    end     0
 
 [ process 2 ]
