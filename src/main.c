@@ -8,6 +8,9 @@
 #include "sim_plan_txt.h"
 #include "ansi_console.h"
 
+#define COLORS_ALL
+#include "ansi_colors.h"
+
 #define MAX_PROCESSES 10 // maximum number of processes that will be created by the simulation
 #define MAX_TIME_SLICE 10 // this is the maximum time-slice allowed, even if the simulation-plan asks for more
 #define MAX_PRIORITY_LEVEL 2
@@ -18,11 +21,28 @@
 // don't change the following consts
 #define MAX_NUMBER_OF_DEVICES 10
 
+#define log_val_i(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%2d   "$green" %s"$cdef"\n", #key, key, comment))
+#define log_val_f(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%5.2f" $green" %s"$cdef"\n", #key, key, comment))
+
 int main()
 {
   setANSI();
 
-  printf("\x1b[91mSomething!");
+  printf($web_orange"CPU and Memory managers simulator"$cdef"\n");
+  printf("\n");
+  printf($web_skyblue"Alunos:"$cdef"\n");
+  printf($white"  Miguel Angelo "$gray"("$web_lightsteelblue"116033119"$gray")"$cdef"\n");
+  printf($white"  Erick Rocha   "$gray"("$web_lightsteelblue"111335299"$gray")"$cdef"\n");
+  printf("\n");
+  printf($web_skyblue"Constants:"$cdef"\n");
+  log_val_i(MAX_PROCESSES, 23, "maximum number of processes that will be created by the simulation");
+  log_val_i(MAX_TIME_SLICE, 23, "maximum time-slice allowed, even if the simulation-plan asks for more");
+  log_val_i(MAX_PRIORITY_LEVEL, 23, "");
+  log_val_f(PROB_NEW_PROCESS, 23, "");
+  log_val_f(AVG_PROC_DURATION, 23, "");
+  log_val_f(PROB_NEW_PROC_CPU_BOUND, 23, "");
+  log_val_i(MAX_NUMBER_OF_DEVICES, 23, "");
+
   simulation_plan *plan = malloc(sizeof(simulation_plan));
   if (0)
   {
@@ -45,6 +65,13 @@ int main()
   (*plan->get_os_settings)(plan, &conf);
   int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
 
+  printf("\n");
+  printf($web_skyblue"Settings:"$cdef"\n");
+  log_val_i(time_slice, 10, "");
+
+  printf("\n");
+  printf($web_skyblue"Starting simulation:"$cdef"\n");
+
   os *os = malloc(sizeof(os));
   os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
 
@@ -64,9 +91,12 @@ int main()
 
   for (int time = 0;; time++)
   {
+    // telling the current time to the simulation plan
     if (plan->set_time != NULL)
       (*plan->set_time)(plan, time);
 
+    // no more processes can be created because
+    // we already created the maximum number of processes
     if (proc_count == MAX_PROCESSES)
       break;
 
