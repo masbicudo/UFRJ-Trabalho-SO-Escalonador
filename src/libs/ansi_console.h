@@ -6,7 +6,7 @@
 #ifndef ENABLE_VIRTUAL_TERMINAL_PROCESSING
 #define ENABLE_VIRTUAL_TERMINAL_PROCESSING  0x0004
 #endif
-void setANSI() {
+static void setANSI() {
   HANDLE stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD outMode;
   GetConsoleMode(stdoutHandle, &outMode);
