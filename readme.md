@@ -33,6 +33,10 @@
 - [Google Image search: printf color c windows GetStdHandle](https://www.google.com/search?q=printf+color+c+windows+GetStdHandle&tbm=isch)
 - [Google Search: printf color c windows ENABLE_VIRTUAL_TERMINAL_PROCESSING](https://www.google.com/search?q=printf+color+c+windows+ENABLE_VIRTUAL_TERMINAL_PROCESSING)
 
+# Debugging tools
+
+- [Application Verifier](https://docs.microsoft.com/pt-br/windows/win32/win7appqual/application-verifier)
+
 # Limitations
 
 - No check after invoking malloc
