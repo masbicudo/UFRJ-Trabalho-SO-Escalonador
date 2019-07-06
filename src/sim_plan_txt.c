@@ -19,10 +19,68 @@
 #define ACTION_END 2
 #define ACTION_IO 3
 
-bool plan_txt_set_time(simulation_plan *plan, int time, os* os)
+bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
 {
-  // checking for plan errors
   txt_sim_data *data = (txt_sim_data *)plan->data;
+  // printing the whole plan
+  if (time < 0)
+  {
+    printf("[os]\n");
+    printf("  time_slice %d\n", data->time_slice);
+    device_entry **device = NULL;
+    for (int index = 0; (device = (device_entry **)utarray_next(data->devices, device)); index++)
+    {
+      if (index == 0)
+        printf("[devices]\n");
+      printf("  %s %d %d\n", (*device)->name, (*device)->duration, (*device)->return_queue);
+    }
+    timeline_entry *entry = NULL;
+    int proc_count = 0;
+    for (int index = 0; (entry = (timeline_entry *)utarray_next(data->global_timeline, entry)); index++)
+    {
+      if (index == 0)
+        printf("[timeline]\n");
+      char *action_name;
+      if (entry->action == ACTION_NEW)
+      {
+        action_name = "new";
+        proc_count++;
+      }
+      else if (entry->action == ACTION_END)
+        action_name = "end";
+      else if (entry->action == ACTION_IO)
+      {
+        device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
+        action_name = (*device)->name;
+      }
+      printf("  %d %s %d\n", entry->time, action_name, entry->sim_pid);
+    }
+    for (int itP = 0; itP < proc_count; itP++)
+    {
+      timeline_entry *entry = NULL;
+      int index = 0;
+      while (entry = (timeline_entry *)utarray_next(data->proc_timeline, entry))
+      {
+        if (entry->sim_pid != itP)
+          continue;
+        if (index++ == 0)
+          printf("[process %d]\n", itP);
+        char *action_name;
+        if (entry->action == ACTION_END)
+          action_name = "end";
+        else if (entry->action == ACTION_IO)
+        {
+          device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
+          action_name = (*device)->name;
+        }
+        printf("  %d %s\n", entry->time, action_name);
+      }
+    }
+
+    return true;
+  }
+
+  // checking for plan errors
 
   if (time > 0)
   {
@@ -40,8 +98,8 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os* os)
           action_name = "end";
         else if (entry->action == ACTION_IO)
         {
-          device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
-          action_name = device->name;
+          device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
+          action_name = (*device)->name;
         }
         printf("Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d", entry->time, action_name, entry->sim_pid);
       }
@@ -59,8 +117,8 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os* os)
           action_name = "end";
         else if (entry->action == ACTION_IO)
         {
-          device_entry *device = (device_entry *)utarray_eltptr(data->devices, entry->device_id);
-          action_name = device->name;
+          device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
+          action_name = (*device)->name;
         }
         printf("Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'", entry->sim_pid, entry->time, action_name);
       }
@@ -118,7 +176,7 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
   txt_sim_data *data = (txt_sim_data *)plan->data;
 
   // mapping pid to sim_pid
-  int sim_pid;
+  int sim_pid = 0;
   for (; sim_pid < data->sim_proc_count; sim_pid++)
   {
     // searching for a sim_proc that is NOT initialized (pid == 0)
@@ -368,21 +426,16 @@ char *trim(char *line)
   l2[0] = '\0';
   return line;
 }
-void device_entry_dispose(void *ptr)
-{
-  device_entry *entry = (device_entry *)ptr;
-  safe_free(entry->name, entry);
-}
 bool plan_txt_create_device(simulation_plan *plan, int device_index, sim_plan_device *out)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
   int len = utarray_len(data->devices);
   if (device_index >= 0 && device_index < len)
   {
-    device_entry *entry = (device_entry *)utarray_eltptr(data->devices, device_index);
-    out->name = entry->name;
-    out->job_duration = entry->duration;
-    out->ret_queue = entry->return_queue;
+    device_entry **entry = (device_entry **)utarray_eltptr(data->devices, device_index);
+    out->name = (*entry)->name;
+    out->job_duration = (*entry)->duration;
+    out->ret_queue = (*entry)->return_queue;
     return true;
   }
   return false;
@@ -576,7 +629,7 @@ void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
   // printing line end
   printf("\n");
 }
-UT_icd device_entry_ptr_icd = {sizeof(device_entry), 0, 0, device_entry_dispose};
+UT_icd device_entry_ptr_icd = {sizeof(device_entry *), 0, 0, 0};
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 {
@@ -628,16 +681,17 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       if (num3 >= 0 && num4 >= 0)
       {
         utarray_extend_back(data->devices);
-        device_entry* entry = (device_entry*)utarray_back(data->devices);
+        device_entry **entry = (device_entry **)utarray_back(data->devices);
+        *entry = safe_malloc(sizeof(device_entry), data->devices);
 
-        char *str_new = safe_malloc(str_len + 1, entry);
+        char *str_new = safe_malloc(str_len + 1, *entry);
         strncpy(str_new, str2, str_len);
         str_new[str_len] = 0;
 
         // creating the device entry, and then adding to the array
-        entry->name = str_new;
-        entry->duration = num3;
-        entry->return_queue = num4;
+        (*entry)->name = str_new;
+        (*entry)->duration = num3;
+        (*entry)->return_queue = num4;
       }
     }
     else if (mode == 2 && match_entry(line, &num1, &str2, &str_len, &num3, 0))
@@ -665,10 +719,10 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       }
       else
       {
-        device_entry *p = NULL;
-        while ((p = (device_entry *)utarray_next(data->devices, p)))
+        device_entry **p = NULL;
+        while ((p = (device_entry **)utarray_next(data->devices, p)))
         {
-          if (strcmp(p->name, str_new) == 0)
+          if (strcmp((*p)->name, str_new) == 0)
           {
             action_id = ACTION_IO;
             device_id = utarray_eltidx(data->devices, p);
@@ -713,10 +767,10 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       }
       else
       {
-        device_entry *p = NULL;
-        while ((p = (device_entry *)utarray_next(data->devices, p)))
+        device_entry **p = NULL;
+        while ((p = (device_entry **)utarray_next(data->devices, p)))
         {
-          if (strcmp(p->name, str_new) == 0)
+          if (strcmp((*p)->name, str_new) == 0)
           {
             action_id = ACTION_IO;
             device_id = utarray_eltidx(data->devices, p);

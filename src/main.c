@@ -62,8 +62,16 @@ int main()
   printf($web_skyblue"Settings:"$cdef"\n");
   log_val_i(time_slice, 10, "");
 
+  //  it is here because the plan does not know how many queues the OS have for the CPU
+  //  it's a matter of leting the plan devine the number of queues
+  // allowing the sim plan to print something before starting
+  // - set_time: is used to show global plan information (print the whole plan if possible)
+  // - print_time_final_state: is used to show the headers of the info that will be printed at the end of each iteration
   printf("\n");
-  printf($web_skyblue"Starting simulation:"$cdef"\n");
+  printf($web_skyblue"Plan info:"$cdef"\n");
+  if (plan->set_time != NULL)
+    if (!(*plan->set_time)(plan, -1, NULL))
+      return 0;
 
   // initializing OS structure
   os *os = safe_malloc(sizeof(struct os), NULL);
@@ -78,8 +86,9 @@ int main()
       (os->devices + itdev)->is_connected = false;
   }
 
-  // allowing the sim plan to print something before starting
-  // this is used to show the headers of the info that will be printed
+  // TODO: move this before OS initialization above
+  printf("\n");
+  printf($web_skyblue"Starting simulation:"$cdef"\n");
   (*plan->print_time_final_state)(plan, -1, os);
 
   scheduler *sch = os->scheduler;
@@ -110,7 +119,7 @@ int main()
       {
         proc_count++;
         process_queue* target_queue = os->scheduler->queues + 0;
-        process *new_proc = safe_malloc(sizeof(process), target_queue->items);
+        process *new_proc = safe_malloc(sizeof(process), os);
 
         int pid = os->next_pid++;
 
@@ -186,7 +195,7 @@ int main()
       if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
       {
         process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-        safe_free(sch->current_process, sch);  // disposing of used memory
+        safe_free(sch->current_process, os);  // disposing of used memory
         sch->current_process = NULL;           // freeing cpu
         continue;
       }
