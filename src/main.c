@@ -65,7 +65,8 @@ int main()
   printf("\n");
   printf($web_skyblue"Starting simulation:"$cdef"\n");
 
-  os *os = safe_malloc(sizeof(os), NULL);
+  // initializing OS structure
+  os *os = safe_malloc(sizeof(struct os), NULL);
   os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
 
   for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)

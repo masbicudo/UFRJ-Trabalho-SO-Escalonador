@@ -26,7 +26,7 @@ void plan_rand_create_process(simulation_plan *plan, int time, int pid)
   map_insert(&data->pid_map, pid, sim_pid);
   data->sim_proc_count++;
   rand_sim_proc *sim_proc = data->sim_procs + sim_pid;
-  memset(sim_proc, 0, sizeof(sim_proc));
+  memset(sim_proc, 0, sizeof(struct rand_sim_proc));
 
   // filling the new sim_proc data:
   // - process duration
