@@ -1,0 +1,67 @@
+# sections in this file:
+# [os]
+#   == process manager ==
+#   time_slice: number of time units for each time-slice
+#   == memory manager ==
+#   memory_frames: number of frames available for the processes, represents the amount of installed RAM
+#   max_working_set: maximum number of frames that the OS can give to a single process
+# [devices]
+#   used to connect devices to the OS
+# [timeline]
+#   global timeline actions
+#   time in this section are relative to the OS global time
+#   a process created here means that the OS is spawning the process
+# [process N]
+#   where N is an spid number of a process created in the global timeline
+#   times in this section are relative to the running time of the process
+#   a process created here means that it is a child process
+
+# Instructions:
+# new N - creates a new process with spid N
+# end - terminates the process
+# read N - reads a virtual address at page N
+
+[ os ]
+  time_slice       4
+  memory_frames   64
+  max_working_set  4
+  secondary_storage disk
+
+[ devices ] # this section must come before the others
+# name  duration  ret-queue
+  disk   3          1
+  tape   8          0
+  print 15          0
+  sleep  0          0
+
+[ timeline ]
+  0     new     0
+  3     new       1
+  6     new         2
+  9     new           3
+  12    new             4
+
+[ process 2 ]
+  # The first read of a process if triggered by the OS to read the entry point at page 0.
+  # The other reads are triggered by the process when it tries to access memory.
+  # Each read operation has the number of the page that is to be loaded.
+  # If the page/frame mapping is available inside the page table use it.
+  # Otherwise, block the process and load the frame from the secondary storage.
+  0     load  1
+  1     load  46
+  2     load  47
+  3     load  48
+  4     load  47
+  5     load  49
+  6     load  50
+  7     end
+
+[ process 3 ]
+  12    end
+
+
+[ process 1 ]
+  14    end
+
+[ process 4 ]
+  2     end

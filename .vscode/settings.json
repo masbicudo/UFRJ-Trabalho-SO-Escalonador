@@ -30,6 +30,7 @@
         "ansi_console.h": "c",
         "safe_alloc.h": "c",
         "initializer_list": "c",
-        "utility": "c"
+        "utility": "c",
+        "config.h": "c"
     }
 }

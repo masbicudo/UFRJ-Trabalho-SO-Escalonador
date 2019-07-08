@@ -37,7 +37,31 @@
 
 - [Application Verifier](https://docs.microsoft.com/pt-br/windows/win32/win7appqual/application-verifier)
 
+# TODO
+
+- txt plan: check that all processes have an end time
+- txt plan: allow unordered spid creation
+- txt plan: change order of params -- time, spid, instruction, arg
+- max_wait_time should come from the simulation plan
+
 # Limitations
 
 - No check after invoking malloc
 - All queues support max amount of processes
+
+## Memory
+- Installed RAM is given in terms of frames, not in terms of bytes
+- Swap size is not specified, we assumed no limits at all
+
+# Assumptions
+
+- the program starts always at the virtual address 0
+- the program has no limit to the amount of virtual memory available
+- there will be no writes, except for swap-out operations
+- there is no Translation Lookaside Buffer
+- each process has it's own page table, i.e. it is not a inverted page table
+- page replacement policy is global LRU with a fixed size maximum working set
+- swap in/out does not know the address of the frame inside the secondary storage
+- there is only one CPU, and only one currently executing frame
+- frames executing or being swapped-in/ou are marked as in_use
+- each frame/page is 4KB

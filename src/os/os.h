@@ -20,16 +20,35 @@ typedef struct device device;
 #define PROC_STATE_RUNNING 5
 #define PROC_STATE_EXIT 6
 
+#define PROC_STATE_WAITING_PAGE 7 // waiting for a page to be loaded from disk
+
+typedef struct page_table_entry
+{
+    int page;
+    int frame;
+} page_table_entry;
+
 typedef struct process
 {
     int pid;
     bool blocked;
     int current_priority; // current priority level (greater means less priority)
     int ready_since;      // when this process had become ready for the last time
+
+    unsigned int pc;      // pointer to the next instruction (we only use the part that represents the frame though)
+    page_table_entry* page_table;
+    int state;
 } process;
+
+typedef struct frame_table_entry
+{
+    bool locked;
+    int owner_pid;
+} frame_table_entry;
 
 typedef struct scheduler
 {
+    process_queue *page_ready_queue; // special queue for immediate execution when a page is loaded
     process_queue *queues;    // pointer to a list of queues by priority
     int queue_count;          // number of queues
     process *current_process; // current process
@@ -56,6 +75,12 @@ typedef struct os
 
     // global information
     int max_processes;
+    int max_working_set;
+
+    // memory management
+    int frame_count;
+    frame_table_entry* frame_table;
+    
 } os;
 
 // Quando um processo quer usar um dispositivo, ele simplesmente pede ao

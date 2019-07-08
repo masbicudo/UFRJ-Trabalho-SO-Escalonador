@@ -5,5 +5,5 @@
 #define AVG_PROC_DURATION 10.0
 #define PROB_NEW_PROC_CPU_BOUND 0.5
 
-// don't change the following consts
-#define MAX_NUMBER_OF_DEVICES 10
+#define MAX_NUMBER_OF_DEVICES 10 // indicates the maximum number of devices that can be connected to the OS
+#define MAX_SUPPORTED_FRAMES 64 // maximum number of frames, indicates the maximum amount of RAM that can be installed

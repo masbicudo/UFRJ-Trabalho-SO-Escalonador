@@ -83,6 +83,17 @@ int enqueue_on_device(int time, device *device, process *process)
 
 int select_next_process(scheduler *scheduler, process **out)
 {
+    // we first look at the page-ready process queue
+    // because it contains processees that were about
+    // to run, but didn't because of a page-fault...
+    // they have waited the pege to load, and now,
+    // they can finally reclaim their CPU time
+    if (scheduler->page_ready_queue->count > 0)
+    {
+        pq_dequeue(scheduler->page_ready_queue, out);
+        return OK;
+    }
+
     // iterating queues in order of priority
     for (int it = 0; it < scheduler->queue_count; it++)
     {

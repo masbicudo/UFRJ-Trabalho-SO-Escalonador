@@ -16,11 +16,19 @@
 
 #define log_val_i(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%2d   "$green" %s"$cdef"\n", #key, key, comment))
 #define log_val_f(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%5.2f" $green" %s"$cdef"\n", #key, key, comment))
+#define log_error_i(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%2d   "$web_red" %s"$cdef"\n", #key, key, comment), (err)++)
+#define log_error_f(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%5.2f" $web_red" %s"$cdef"\n", #key, key, comment), (err)++)
+
+bool ispowerof2(unsigned int x)
+{
+  return x && !(x & (x - 1));
+}
 
 int main()
 {
   setANSI();
 
+  int err = 0;
   printf($web_orange"CPU and Memory managers simulator"$cdef"\n");
   printf("\n");
   printf($web_skyblue"Alunos:"$cdef"\n");
@@ -34,7 +42,18 @@ int main()
   log_val_f(PROB_NEW_PROCESS, 23, "");
   log_val_f(AVG_PROC_DURATION, 23, "");
   log_val_f(PROB_NEW_PROC_CPU_BOUND, 23, "");
-  log_val_i(MAX_NUMBER_OF_DEVICES, 23, "");
+  log_val_i(MAX_NUMBER_OF_DEVICES, 23, "indicates the maximum number of devices that can be connected to the OS");
+  if (!ispowerof2(MAX_SUPPORTED_FRAMES))
+    log_error_i(err, MAX_SUPPORTED_FRAMES, 23, "must be power of 2");
+  else
+    log_val_i(MAX_SUPPORTED_FRAMES, 23, "maximum number of frames, indicates the maximum amount of RAM that can be installed");
+  if (err > 0)
+  {
+    printf("  "$red"%d"$cdef" errors occured!", err);
+    exit(1);
+  }
+
+  const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
 
   simulation_plan *plan = safe_malloc(sizeof(simulation_plan), NULL);
   if (0)
@@ -112,19 +131,13 @@ int main()
     int new_proc_count = (*plan->incoming_processes)(plan, time);
     for (int it = 0; it < new_proc_count; it++)
     {
-      // each process can be:
-      // - cpu bound
-      // - io bound
       if (proc_count <= MAX_PROCESSES)
       {
         proc_count++;
         process_queue* target_queue = os->scheduler->queues + 0;
         process *new_proc = safe_malloc(sizeof(process), os);
-
         int pid = os->next_pid++;
-
         (*plan->create_process)(plan, time, pid);
-
         process_init(new_proc, pid);
         pq_enqueue(target_queue, new_proc);
       }
@@ -165,7 +178,21 @@ int main()
         if (device->is_connected && device->current_job_end == time)
         {
           device->current_process->ready_since = time;
-          process_queue *queue_to_ret_to = sch->queues + device->ret_queue;
+
+          // What queue should this process return to?
+          // depends on the kind of operation it was executing:
+          // - waiting for page to load: highest possible priority
+          // - normal IO: return queue indicated by the device
+          process_queue *queue_to_ret_to;
+          if (device->current_process->state == PROC_STATE_WAITING_PAGE)
+          {
+            queue_to_ret_to = sch->page_ready_queue;
+          }
+          else
+          {
+            queue_to_ret_to = sch->queues + device->ret_queue;
+          }
+
           if (pq_enqueue(queue_to_ret_to, device->current_process) == OK)
           {
             // checking whether there is a process waiting for the device and set it as the current
@@ -180,9 +207,68 @@ int main()
       // # Selecting the next process if CPU is available.
       if (sch->current_process == NULL)
       {
-        if (select_next_process(sch, &(sch->current_process)) == OK)
+        process* process;
+        if (select_next_process(sch, &process) == OK)
         {
-          sch->time_slice_end = time + time_slice;
+          // check if PC points to a page that is available
+          const unsigned int bit_field = MAX_SUPPORTED_FRAMES - 1;
+          int page_number = (process->pc >> 12) & page_bit_field; // 4KB is the size of each frame/page
+
+          // each process has a table that contains info about all of its pages
+          bool frame_number = -1;
+          for (int itT = 0; itT < os->max_working_set; itT++)
+          {
+            page_table_entry* entry = process->page_table + itT;
+            if (entry->page == page_number)
+            {
+              frame_number = entry->frame;
+              break;
+            }
+          }
+
+          if (frame_number >= 0)
+          {
+            // page found
+            sch->current_process = process;
+            sch->time_slice_end = time + time_slice;
+          }
+          else
+          {
+            // page fault
+
+            // Where is the page?
+            // Don't know what device it is in... we assumed it is unknown
+            // It just magically loads the page, end of story!
+            int swap_device = (*plan->get_swap_device)(plan);
+            // moving current process to the device wait queue
+            device* target_device = os->devices + swap_device;
+            // after device finishes with the load op, the process will go to the page-ready queue
+            process->state = PROC_STATE_WAITING_PAGE;
+
+            // Finding a frame to load the page
+            // before doing IO, we need to know what frame will receive the data
+            // DMA operations need to know everything beforehand
+            int free_frame = -1;
+            for (int itF = 0; itF < os->frame_count; itF++)
+            {
+              frame_table_entry* frame = os->frame_table + itF;
+              if (frame->owner_pid == -1)
+              {
+                free_frame = itF;
+                break;
+              }
+            }
+
+            // if there is no free frame to use, then we need to swap-out a process
+            if (free_frame < 0)
+            {
+              // finding a process to swap-out
+            }
+
+            enqueue_on_device(time, target_device, process);
+            sch->current_process = NULL;
+            continue;
+          }
         }
         else
         {
@@ -195,7 +281,7 @@ int main()
       if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
       {
         process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-        safe_free(sch->current_process, os);  // disposing of used memory
+        safe_free(sch->current_process, os);   // disposing of used memory
         sch->current_process = NULL;           // freeing cpu
         continue;
       }
