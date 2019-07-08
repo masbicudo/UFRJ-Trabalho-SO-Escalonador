@@ -38,6 +38,8 @@ typedef struct process
     unsigned int pc;      // pointer to the next instruction (we only use the part that represents the frame though)
     page_table_entry* page_table;
     int state;
+    
+    byte pending_operation[sizeof(page_load_operation)];
 } process;
 
 typedef struct frame_table_entry
@@ -80,8 +82,15 @@ typedef struct os
     // memory management
     int frame_count;
     frame_table_entry* frame_table;
-    
+
 } os;
+
+typedef struct page_load_operation
+{
+    int page_number;      // number of the page to load
+    int page_table_index; // index of the page table to load the page
+
+} page_load_operation;
 
 // Quando um processo quer usar um dispositivo, ele simplesmente pede ao
 // sistema operacional dizendo o que quer fazer com o dispositivo.
