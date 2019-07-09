@@ -60,8 +60,9 @@
 - there will be no writes, except for swap-out operations
 - there is no Translation Lookaside Buffer
 - each process has it's own page table, i.e. it is not a inverted page table
-- page replacement policy is global LRU with a fixed size maximum working set
+- page replacement policy is local LRU with a fixed size maximum working set
 - swap in/out does not know the address of the frame inside the secondary storage
 - there is only one CPU, and only one currently executing frame
 - frames executing or being swapped-in/ou are marked as in_use
 - each frame/page is 4KB
+- the processing unit is a process, there is no threads

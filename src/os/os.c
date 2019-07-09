@@ -62,13 +62,64 @@ void os_dispose(os *os)
     safe_free(os->devices, os);
 }
 
+void storage_device_find_free_frame() {
+
+  // // if there is no free frame to use, then we need to swap-out a process
+  // if (free_frame_number < 0)
+  // {
+  //   // finding a process to swap-out
+  //   process *swapout_proc = NULL;
+  //   for (int itD = 0; itD < MAX_NUMBER_OF_DEVICES; itD++)
+  //   {
+  //     device *dev = os->devices + itD;
+  //     if (!dev->is_connected)
+  //       continue;
+  //     for (int itQ = 0; itQ < dev->blocked_queue->count; itQ++)
+  //     {
+  //       process *blk_proc = dev->blocked_queue->items + itQ;
+  //       // a process can get here with the following states:
+  //       // - PROC_STATE_BLOCKED_SUSPEND
+  //       // - PROC_STATE_WAITING_PAGE
+  //       // - PROC_STATE_BLOCKED
+  //       // We need it to be PROC_STATE_BLOCKED
+  //       if (blk_proc->state == PROC_STATE_BLOCKED)
+  //       {
+  //         swapout_proc = blk_proc;
+  //         break;
+  //       }
+  //     }
+  //   }
+  // }
+  // else
+  // {
+  //   // a frame that is target of a DMA operation cannot be swapped
+  //   frame_table_entry *free_frame = os->frame_table + free_frame_number;
+  //   free_frame->locked = true;
+  //   free_frame->used = true;
+
+  //   // adding the process to the wait queue for the device
+  //   enqueue_on_device(time, target_device, proc);
+  //   sch->current_process = NULL;
+  //   continue;
+  // }
+}
+
 int enqueue_on_device(int time, device *device, process *process)
 {
-    if ((device->blocked_queue)->count == 0 && device->current_process == NULL)
+    if (device->current_process == NULL && device->blocked_queue->count == 0)
     {
         // There are no processes waiting to use the device and
         // no process is currently using the device, which means we can
         // give this process the control over this device.
+
+        // If this device is a storage device, when reading we need a target memory frame
+        // to load the data... if a frame number was not provided, then find a free frame.
+        // Finding a free frame may cause a process to be swapped-out if memory is full.
+        if (process->pending_op_type == OP_PAGE_LOAD && process->store_op.frame_number < 0)
+        {
+            storage_device_find_free_frame();
+        }
+
         device->current_process = process;
         device->current_job_end = time + device->job_duration;
         return OK;

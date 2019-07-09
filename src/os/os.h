@@ -22,10 +22,19 @@ typedef struct device device;
 
 #define PROC_STATE_WAITING_PAGE 7 // waiting for a page to be loaded from disk
 
+
+#define OP_NONE 0
+#define OP_PAGE_LOAD 1
+#define OP_PAGE_LOADED 2
+
+
 typedef struct page_table_entry
 {
-    int page;
+    bool is_on_memory;
+    bool is_on_disk;
     int frame;
+    int last_access;
+
 } page_table_entry;
 
 typedef struct process
@@ -35,26 +44,32 @@ typedef struct process
     int current_priority; // current priority level (greater means less priority)
     int ready_since;      // when this process had become ready for the last time
 
-    unsigned int pc;      // pointer to the next instruction (we only use the part that represents the frame though)
-    page_table_entry* page_table;
-    int state;
-    
-    byte pending_operation[sizeof(page_load_operation)];
+    int state; // the state of the process
+
+    unsigned int pc;              // pointer to the next instruction (we only use the part that represents the frame though)
+    page_table_entry *page_table; // table that maps pages to frames
+    int *working_set;             // list of pages that are mapped to memory frames
+
+    int pending_op_type;               // operation to do when device respond
+    storage_device_operation store_op; // storage operation info
+
 } process;
 
 typedef struct frame_table_entry
 {
-    bool locked;
-    int owner_pid;
+    bool locked; // whether the frame can be swapped out or not
+    bool used;   // whether the frame is used or free
+
 } frame_table_entry;
 
 typedef struct scheduler
 {
     process_queue *page_ready_queue; // special queue for immediate execution when a page is loaded
-    process_queue *queues;    // pointer to a list of queues by priority
-    int queue_count;          // number of queues
-    process *current_process; // current process
-    int time_slice_end;       // when the time slice of the current process will end
+    process_queue *queues;           // pointer to a list of queues by priority
+    int queue_count;                 // number of queues
+    process *current_process;        // current process
+    int time_slice_end;              // when the time slice of the current process will end
+
 } scheduler;
 
 typedef struct device
@@ -66,6 +81,7 @@ typedef struct device
     int current_job_end;          // (simulation) when the os will receive a signal indicating that the job is done
     int ret_queue;                // return queue for processes whose job on this device has finished
     bool is_connected;            // returns whether device is connected
+
 } device;
 
 typedef struct os
@@ -81,16 +97,16 @@ typedef struct os
 
     // memory management
     int frame_count;
-    frame_table_entry* frame_table;
+    frame_table_entry *frame_table;
 
 } os;
 
-typedef struct page_load_operation
+typedef struct storage_device_operation
 {
-    int page_number;      // number of the page to load
-    int page_table_index; // index of the page table to load the page
+    int page_number;  // number of the page that will be loaded
+    int frame_number; // number of the frame to use
 
-} page_load_operation;
+} storage_device_operation;
 
 // Quando um processo quer usar um dispositivo, ele simplesmente pede ao
 // sistema operacional dizendo o que quer fazer com o dispositivo.
@@ -132,5 +148,7 @@ int select_next_process(scheduler *scheduler, process **out);
 
 int process_init(process *p, int pid);
 void process_dispose(process *process);
+
+void storage_device_find_free_frame();
 
 #endif

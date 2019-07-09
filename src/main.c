@@ -169,6 +169,8 @@ int main()
 
     while (1)
     {
+      bool continue_parent = false;
+
       // # Checking devices for finished jobs.
       // This must be inside the loop, because
       // there are immediate devices that don't
@@ -179,34 +181,96 @@ int main()
         device *device = os->devices + it;
         if (device->is_connected && device->current_job_end == time)
         {
-          device->current_process->ready_since = time;
+          process *proc = device->current_process;
+          proc->ready_since = time;
+
+          // Executing the pending operation
+          storage_device_operation *st_op = &(proc->store_op);
+          if (proc->pending_op_type == OP_PAGE_LOAD)
+          {
+            // the page load operation will start another IO operation
+            // to load the desired page to the indicated frame, but
+            // it will not enqueue the operation, it will just do it
+            // since it already has the device...
+            // if it was possible to load a page from another device
+            // then we would have to enqueue on that device
+            int pt_index = st_op->page_number;
+            int ft_index = st_op->frame_number;
+            // pretend that we used st_op info... not using because the simulation doesn't need it
+            // but it were not a simulation, then we'd use them to load real data from storage
+            proc->pending_op_type = OP_PAGE_LOADED;
+            device->current_job_end == time + device->job_duration;
+            continue;
+          }
+          else if (proc->pending_op_type == OP_PAGE_LOADED)
+          {
+            // the page loaded operation will associate the loaded
+            // frame with the page
+            proc->pending_op_type = OP_NONE;
+            int pt_index = st_op->page_number;
+            int ft_index = st_op->frame_number;
+            page_table_entry *pt_entry = proc->page_table + pt_index;
+            pt_entry->frame = ft_index;
+            pt_entry->is_on_memory = true;
+            pt_entry->last_access = time;
+          }
 
           // What queue should this process return to?
           // depends on the kind of operation it was executing:
           // - waiting for page to load: highest possible priority
           // - normal IO: return queue indicated by the device
           process_queue *queue_to_ret_to;
-          if (device->current_process->state == PROC_STATE_WAITING_PAGE)
-          {
+          if (proc->state == PROC_STATE_WAITING_PAGE)
             queue_to_ret_to = sch->page_ready_queue;
-            page_load_operation *pg_load = (page_load_operation*)&(device->current_process->pending_operation);
-            // change page table entry to associate the new page with the frame
-            device->current_process->page_table[pg_load->page_table_index].page = pg_load->page_number;
-          }
           else
-          {
             queue_to_ret_to = sch->queues + device->ret_queue;
+
+          // if the device uses a memory frame, unlock it
+          if (st_op->frame_number >= 0)
+          {
+            os->frame_table[st_op->frame_number].locked = false;
+            st_op->frame_number = -1;
           }
 
-          if (pq_enqueue(queue_to_ret_to, device->current_process) == OK)
+          if (pq_enqueue(queue_to_ret_to, proc) == OK)
           {
             // checking whether there is a process waiting for the device and set it as the current
-            if (pq_dequeue(device->blocked_queue, &(device->current_process)) == OK)
+            process *next_proc;
+            if (pq_dequeue(device->blocked_queue, &next_proc) == OK)
+            {
+              device->current_process = next_proc;
+
+              // If this device is a storage device, when reading we need a target memory frame
+              // to load the data... if a frame number was not provided, then find a free frame.
+              // Finding a free frame may cause a process to be swapped-out if memory is full.
+              if (next_proc->pending_op_type == OP_PAGE_LOAD && next_proc->store_op.frame_number < 0)
+              {
+                TODO;
+                // TODO: find free frame will not cause swap-out,
+                // it will enqueue the process in a wait-for-free-frame queue,
+                // and just wait until a free-frame is provided by the OS
+
+                storage_device_find_free_frame();
+
+                continue_parent = true;
+                break;
+              }
+
               device->current_job_end = time + device->job_duration;
+            }
             else
               device->current_process = NULL;
           }
         }
+      }
+
+      if (continue_parent)
+        continue;
+
+      // # Swap-out processes to fulfill the requirements of procs waiting for a free memory frame
+      if (os->proc_wait_frame_queue->count > 0)
+      {
+        // TODO: swap-out processes
       }
 
       // # Selecting the next process if CPU is available.
@@ -220,23 +284,12 @@ int main()
           int page_number = (proc->pc >> 12) & page_bit_field; // 4KB is the size of each frame/page
 
           // each process has a table that contains info about all of its pages
-          bool frame_number = -1;
-          int free_page_table_entry = -1;
-          for (int itT = 0; itT < os->max_working_set; itT++)
-          {
-            page_table_entry *entry = proc->page_table + itT;
-            if (entry->page == page_number)
-            {
-              frame_number = entry->frame;
-              break;
-            }
-            if (free_page_table_entry < 0 && entry->frame < 0)
-              free_page_table_entry = itT;
-          }
+          page_table_entry *pt_entry = proc->page_table + page_number;
 
-          if (frame_number >= 0)
+          if (pt_entry->is_on_memory)
           {
             // page found
+            printf("Requested page %d, frame %d", page_number, pt_entry->frame);
             proc->state = PROC_STATE_RUNNING;
             sch->current_process = proc;
             sch->time_slice_end = time + time_slice;
@@ -245,22 +298,31 @@ int main()
           {
             // page fault
 
-            // we need to find a free page-table entry to fill with the needed page data
-            if (free_page_table_entry < 0)
+            int free_ws_index = -1;
+            for (int itW = 0; itW < os->max_working_set; itW++)
+              if (free_ws_index < 0)
+                free_ws_index = itW;
+
+            // we need to use a free working-set entry to fill with the needed page data
+            if (free_ws_index < 0)
             {
-              // free page-table entry not found, we need to write a page to disk
-              // then load the requested page into the writen entry
-              int lru_page_number = -1;
+              // Free working-set entry not found, we need to write
+              // the LRU page to disk then load the requested page
+              // into that entry
+
+              // locating the LRU working-set entry
+              int lru_pt_index = -1;
               {
-                page_table_entry *lru_page = NULL;
-                for (int itT = 0; itT < os->max_working_set; itT++)
+                page_table_entry *lru_pt_entry = NULL;
+                for (int itW = 0; itW < os->max_working_set; itW++)
                 {
-                  page_table_entry *page_entry = proc->page_table + itT;
-                  frame_table_entry *frame_entry = os->frame_table + page_entry->frame;
-                  if (!frame_entry->locked && (lru_page_number < 0 || page_entry->last_access < lru_page->last_access))
+                  int pt_index = proc->working_set[itW];
+                  page_table_entry *pt_entry = proc->page_table + pt_index;
+                  frame_table_entry *ft_entry = os->frame_table + pt_entry->frame;
+                  if (!ft_entry->locked && (lru_pt_index < 0 || pt_entry->last_access < lru_pt_entry->last_access))
                   {
-                    lru_page = page_entry;
-                    lru_page_number = itT;
+                    lru_pt_entry = pt_entry;
+                    lru_pt_index = pt_index;
                   }
                 }
               }
@@ -269,30 +331,39 @@ int main()
               // it means that the process cannot run,
               // and it cannot be suspended... the only choice is
               // to kill the process
-              if (lru_page_number < 0)
+              if (lru_pt_index < 0)
               {
                 // TODO: kill the process
               }
               else
               {
                 // we can now write the frame to disk, and then reuse the frame for another page
-                page_table_entry *lru_page = proc->page_table + lru_page_number;
-                frame_table_entry *lru_frame = os->frame_table + lru_page->frame;
-                printf("Writing page %d / frame %d to disk, to free page-table entry %d", lru_page->page, lru_page->frame, lru_page_number);
+                page_table_entry *lru_pt_entry = proc->page_table + lru_pt_index;
+                frame_table_entry *lru_frame = os->frame_table + lru_pt_entry->frame;
+                printf("Writing page %d / frame %d to disk, to free page-table entry %d", lru_pt_index, lru_pt_entry->frame, lru_pt_index);
 
-                // setting data to remember what are the next steps
-                lru_page->page = -1; // invalid page number, to indicate that the entry is free
+                int frame_to_use = lru_pt_entry->frame;
+                lru_pt_entry->is_on_memory = false;
+                lru_pt_entry->is_on_disk = true; // Where on disk? We assumed it is not to be known... it's there!
+                lru_pt_entry->frame = -1;
+
+                // after device finishes with the load op, the process will go to the page-ready queue
                 proc->state = PROC_STATE_WAITING_PAGE;
-                page_load_operation *pg_load = (page_load_operation *)&(proc->pending_operation);
-                pg_load->page_number = page_number;
 
+                // setting data to remember what are the steps after the IO operation completes:
+                // - load the page into the free frame and associate them
+                // - continue with the program as if nothing happened
+                proc->pending_op_type = OP_PAGE_LOAD;
+                storage_device_operation *st_op = &(proc->store_op);
+                st_op->page_number = page_number;
+                st_op->frame_number = frame_to_use;
+
+                // Before doing a write IO, we need to know what frame contains the data,
+                // and lock it so that it cannot be swapped out.
+                // After the operation completes the frame will be unlocked.
                 lru_frame->locked = true;
 
-                // Where is the page?
-                // Don't know what device it is in... we assumed it is unknown
-                // It just magically loads the page, end of story!
                 device *target_device = os->devices + swap_device;
-                // when this IO completes, the page will be free
                 enqueue_on_device(time, target_device, proc);
 
                 sch->current_process = NULL;
@@ -301,63 +372,22 @@ int main()
             }
             else
             {
-              // moving current process to the device wait queue
-              device *target_device = os->devices + swap_device;
               // after device finishes with the load op, the process will go to the page-ready queue
               proc->state = PROC_STATE_WAITING_PAGE;
 
-              // Finding a frame to load the page
-              // before doing IO, we need to know what frame will receive the data
-              // DMA operations need to know everything beforehand
-              int free_frame_number = -1;
-              for (int itF = 0; itF < os->frame_count; itF++)
-              {
-                frame_table_entry *frame = os->frame_table + itF;
-                if (frame->owner_pid == -1)
-                {
-                  free_frame_number = itF;
-                  break;
-                }
-              }
+              // setting data to remember what are the steps after the IO operation completes:
+              // - load the page into the free frame and associate them
+              // - continue with the program as if nothing happened
+              proc->pending_op_type = OP_PAGE_LOAD;
+              storage_device_operation *st_op = &(proc->store_op);
+              st_op->page_number = page_number;
+              st_op->frame_number = -1; // no frame will be indicated to load the data, will be decided just before reading
 
-              // if there is no free frame to use, then we need to swap-out a process
-              if (free_frame_number < 0)
-              {
-                // finding a process to swap-out
-                process *swapout_proc = NULL;
-                for (int itD = 0; itD < MAX_NUMBER_OF_DEVICES; itD++)
-                {
-                  device *dev = os->devices + itD;
-                  if (!dev->is_connected)
-                    continue;
-                  for (int itQ = 0; itQ < dev->blocked_queue->count; itQ++)
-                  {
-                    process *blk_proc = dev->blocked_queue->items + itQ;
-                    // a process can get here with the following states:
-                    // - PROC_STATE_BLOCKED_SUSPEND
-                    // - PROC_STATE_WAITING_PAGE
-                    // - PROC_STATE_BLOCKED
-                    // We need it to be PROC_STATE_BLOCKED
-                    if (blk_proc->state == PROC_STATE_BLOCKED)
-                    {
-                      swapout_proc = blk_proc;
-                      break;
-                    }
-                  }
-                }
-              }
-              else
-              {
-                // a frame that is target of a DMA operation cannot be swapped
-                frame_table_entry *free_frame = os->frame_table + free_frame_number;
-                free_frame->locked = true;
-                free_frame->owner_pid = proc->pid;
-
-                // adding the process to the wait queue for the device
-                enqueue_on_device(time, target_device, proc);
-                sch->current_process = NULL;
-                continue;
-              }
+              // adding the process to the wait queue for the device
+              device *target_device = os->devices + swap_device;
+              enqueue_on_device(time, target_device, proc);
+              sch->current_process = NULL;
+              continue;
             }
           }
         }
