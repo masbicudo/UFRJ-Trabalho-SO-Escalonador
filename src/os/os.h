@@ -27,6 +27,14 @@ typedef struct device device;
 #define OP_PAGE_LOAD 1
 #define OP_PAGE_LOADED 2
 
+typedef struct page_table_entry page_table_entry;
+typedef struct process process;
+typedef struct frame_table_entry frame_table_entry;
+typedef struct scheduler scheduler;
+typedef struct device device;
+typedef struct os os;
+typedef struct storage_device_operation storage_device_operation;
+typedef struct process_queue process_queue;
 
 typedef struct page_table_entry
 {
@@ -36,6 +44,13 @@ typedef struct page_table_entry
     int last_access;
 
 } page_table_entry;
+
+typedef struct storage_device_operation
+{
+    int page_number;  // number of the page that will be loaded
+    int frame_number; // number of the frame to use
+
+} storage_device_operation;
 
 typedef struct process
 {
@@ -99,14 +114,9 @@ typedef struct os
     int frame_count;
     frame_table_entry *frame_table;
 
+    process_queue *wait_frame_queue;
+
 } os;
-
-typedef struct storage_device_operation
-{
-    int page_number;  // number of the page that will be loaded
-    int frame_number; // number of the frame to use
-
-} storage_device_operation;
 
 // Quando um processo quer usar um dispositivo, ele simplesmente pede ao
 // sistema operacional dizendo o que quer fazer com o dispositivo.

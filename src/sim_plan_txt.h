@@ -6,6 +6,7 @@
 #include "map.h"
 #include "rand.h"
 
+typedef struct sim_proc_metadata sim_proc_metadata;
 typedef struct txt_sim_data txt_sim_data;
 typedef struct timeline_entry timeline_entry;
 typedef struct device_entry device_entry;
@@ -17,6 +18,9 @@ struct timeline_entry
   int action;
   int device_id;
   int sim_pid;
+  int param1;
+
+  bool is_copy;
 
   bool done; // indicates that this action was already requested by the simulation
 };
@@ -25,6 +29,11 @@ struct device_entry
   char *name;
   int duration;
   int return_queue;
+};
+
+struct sim_proc_metadata
+{
+  int copy_of;
 };
 
 struct txt_sim_data
@@ -40,6 +49,12 @@ struct txt_sim_data
   UT_array *devices;
 
   int time_slice;
+  int memory_frames;
+  int max_working_set;
+
+  char *swap_device_name;
+
+  sim_proc_metadata* sim_proc_meta;
 };
 
 struct txt_sim_proc

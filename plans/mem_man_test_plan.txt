@@ -19,13 +19,13 @@
 # Instructions:
 # new N - creates a new process with spid N
 # end - terminates the process
-# read N - reads a virtual address at page N
+# pc N - execute instructions at virtual address at page N
 
 [ os ]
-  time_slice       4
-  memory_frames   64
-  max_working_set  4
-  secondary_storage disk
+  time_slice         4
+  memory_frames     14 # with 4 processes * 4 pages this will cause major process swap-outs
+  max_working_set    4
+  swap_device       disk
 
 [ devices ] # this section must come before the others
 # name  duration  ret-queue
@@ -41,27 +41,28 @@
   9     new           3
   12    new             4
 
-[ process 2 ]
+[ process 0 ]
   # The first read of a process if triggered by the OS to read the entry point at page 0.
   # The other reads are triggered by the process when it tries to access memory.
-  # Each read operation has the number of the page that is to be loaded.
+  # Each read operation has the number of the page that is to be used.
   # If the page/frame mapping is available inside the page table use it.
   # Otherwise, block the process and load the frame from the secondary storage.
-  0     load  1
-  1     load  46
-  2     load  47
-  3     load  48
-  4     load  47
-  5     load  49
-  6     load  50
+  0     mem  1
+  1     mem  46
+  2     mem  47
+  3     mem  48
+  4     mem  47
+  5     mem  49
+  6     mem  50
   7     end
 
-[ process 3 ]
-  12    end
+[ process 1 copy 0 ]
+  # when specifying the copy argument, this process will have the same instructions
+  # at the same relative times as the copied process...
+  # note that it is still possible to add more instructions here
 
+[ process 2 copy 1 ]
 
-[ process 1 ]
-  14    end
+[ process 3 copy 2 ]
 
-[ process 4 ]
-  2     end
+[ process 4 copy 3 ]

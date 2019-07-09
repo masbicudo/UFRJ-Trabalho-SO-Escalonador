@@ -14,10 +14,10 @@
 
 #include "config.h"
 
-#define log_val_i(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%2d   "$green" %s"$cdef"\n", #key, key, comment))
-#define log_val_f(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%5.2f" $green" %s"$cdef"\n", #key, key, comment))
-#define log_error_i(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%2d   "$web_red" %s"$cdef"\n", #key, key, comment), (err)++)
-#define log_error_f(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%5.2f" $web_red" %s"$cdef"\n", #key, key, comment), (err)++)
+#define log_val_i(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%4d   "$green" %s"$cdef"\n", #key, key, comment))
+#define log_val_f(key,col,comment) (printf($white"  %-"#col"."#col"s "$web_lightsteelblue"%7.2f" $green" %s"$cdef"\n", #key, key, comment))
+#define log_error_i(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%4d   "$web_red" %s"$cdef"\n", #key, key, comment), (err)++)
+#define log_error_f(err,key,col,comment) (printf($web_lightsalmon"  %-"#col"."#col"s "$red"%7.2f" $web_red" %s"$cdef"\n", #key, key, comment), (err)++)
 
 bool ispowerof2(unsigned int x)
 {
@@ -47,13 +47,12 @@ int main()
     log_error_i(err, MAX_SUPPORTED_FRAMES, 23, "must be power of 2");
   else
     log_val_i(MAX_SUPPORTED_FRAMES, 23, "maximum number of frames, indicates the maximum amount of RAM that can be installed");
+  log_val_i(MAX_WORKING_SET, 23, "invariant maximum working set");
   if (err > 0)
   {
     printf("  "$red"%d"$cdef" errors occured!", err);
     exit(1);
   }
-
-  const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
 
   simulation_plan *plan = safe_malloc(sizeof(simulation_plan), NULL);
   if (0)
@@ -70,12 +69,15 @@ int main()
   }
   else
   {
-    plan_txt_init(plan, "plans/one_proc_test_plan.txt", MAX_PROCESSES);
+    plan_txt_init(plan, "plans/mem_man_test_plan.txt", MAX_PROCESSES);
   }
 
   plan_os_settings conf;
   (*plan->get_os_settings)(plan, &conf);
   int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
+  int max_working_set = clamp(conf.max_working_set, 0, MAX_WORKING_SET);
+  int memory_frames = clamp(conf.memory_frames, 0, MAX_SUPPORTED_FRAMES);
+  const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
 
   printf("\n");
   printf($web_skyblue"Settings:"$cdef"\n");
@@ -245,7 +247,6 @@ int main()
               // Finding a free frame may cause a process to be swapped-out if memory is full.
               if (next_proc->pending_op_type == OP_PAGE_LOAD && next_proc->store_op.frame_number < 0)
               {
-                TODO;
                 // TODO: find free frame will not cause swap-out,
                 // it will enqueue the process in a wait-for-free-frame queue,
                 // and just wait until a free-frame is provided by the OS
@@ -268,7 +269,7 @@ int main()
         continue;
 
       // # Swap-out processes to fulfill the requirements of procs waiting for a free memory frame
-      if (os->proc_wait_frame_queue->count > 0)
+      if (os->wait_frame_queue->count > 0)
       {
         // TODO: swap-out processes
       }
@@ -280,8 +281,7 @@ int main()
         if (select_next_process(sch, &proc) == OK)
         {
           // check if PC points to a page that is available
-          const unsigned int bit_field = MAX_SUPPORTED_FRAMES - 1;
-          int page_number = (proc->pc >> 12) & page_bit_field; // 4KB is the size of each frame/page
+          int page_number = proc->pc >> 12; // 4KB is the size of each frame/page
 
           // each process has a table that contains info about all of its pages
           page_table_entry *pt_entry = proc->page_table + page_number;

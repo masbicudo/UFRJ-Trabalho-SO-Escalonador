@@ -9,6 +9,7 @@ typedef struct simulation_entry_type simulation_entry_type;
 typedef struct sim_plan_device sim_plan_device;
 typedef struct plan_os_settings plan_os_settings;
 
+typedef int sim_plan_get_swap_device(simulation_plan *plan);
 typedef void sim_plan_print_time_final_state(simulation_plan *plan, int time, os *os);
 typedef void sim_plan_get_os_settings(simulation_plan *plan, plan_os_settings *out);
 typedef bool sim_plan_set_time(simulation_plan *plan, int time, os* os);
@@ -23,6 +24,7 @@ typedef void sim_plan_dispose(simulation_plan *plan);
 struct simulation_plan
 {
   void *data;
+  sim_plan_get_swap_device *get_swap_device;
   sim_plan_get_os_settings *get_os_settings;
   sim_plan_set_time *set_time;
   sim_plan_incoming_processes *incoming_processes;
@@ -44,6 +46,8 @@ struct sim_plan_device
 
 struct plan_os_settings {
   int time_slice;
+  int max_working_set;
+  int memory_frames;
 };
 
 #endif

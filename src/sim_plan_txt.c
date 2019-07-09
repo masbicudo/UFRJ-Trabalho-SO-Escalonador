@@ -15,14 +15,24 @@
 #define LOG_PROC_OUT "proc-out"
 #define LOG_PROC_IN "proc-in "
 
+#define ACTION_NONE 0
 #define ACTION_NEW 1
 #define ACTION_END 2
 #define ACTION_IO 3
+#define ACTION_ACCESS_MEMORY 4
+
+void error(char *msg)
+{
+  printf(msg);
+  exit(1);
+}
 
 bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
+  
   // printing the whole plan
+  int proc_count = 0;
   if (time < 0)
   {
     printf("[os]\n");
@@ -34,8 +44,10 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
         printf("[devices]\n");
       printf("  %s %d %d\n", (*device)->name, (*device)->duration, (*device)->return_queue);
     }
+
+    // [timeline]
+    // - counting processes
     timeline_entry *entry = NULL;
-    int proc_count = 0;
     for (int index = 0; (entry = (timeline_entry *)utarray_next(data->global_timeline, entry)); index++)
     {
       if (index == 0)
@@ -48,13 +60,21 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
       }
       else if (entry->action == ACTION_END)
         action_name = "end";
+      else if (entry->action == ACTION_ACCESS_MEMORY)
+        action_name = "mem";
       else if (entry->action == ACTION_IO)
       {
         device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
         action_name = (*device)->name;
       }
-      printf("  %d %s %d\n", entry->time, action_name, entry->sim_pid);
+
+      if (entry->action == ACTION_ACCESS_MEMORY)
+        printf("  %d %s %d %d\n", entry->time, action_name, entry->sim_pid, entry->param1);
+      else
+        printf("  %d %s %d\n", entry->time, action_name, entry->sim_pid);
     }
+
+    // [process N]
     for (int itP = 0; itP < proc_count; itP++)
     {
       timeline_entry *entry = NULL;
@@ -64,24 +84,61 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
         if (entry->sim_pid != itP)
           continue;
         if (index++ == 0)
-          printf("[process %d]\n", itP);
+        {
+          if (data->sim_proc_meta[itP].copy_of < 0)
+            printf("[process %d]\n", itP);
+          else
+            printf("[process %d copy %d]\n", itP, data->sim_proc_meta[itP].copy_of);
+        }
         char *action_name;
         if (entry->action == ACTION_END)
           action_name = "end";
+        else if (entry->action == ACTION_ACCESS_MEMORY)
+          action_name = "mem";
         else if (entry->action == ACTION_IO)
         {
           device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
           action_name = (*device)->name;
         }
-        printf("  %d %s\n", entry->time, action_name);
+
+        if (!entry->is_copy)
+        {
+          if (entry->action == ACTION_ACCESS_MEMORY)
+            printf("  %d %s %d\n", entry->time, action_name, entry->param1);
+          else
+            printf("  %d %s\n", entry->time, action_name);
+        }
       }
     }
 
     return true;
   }
 
-  // checking for plan errors
+  // checking for plan static errors
+  if (time < 0)
+  {
+    // all processes must have and end statement
+    // looking for actions planed for the previous time
+    bool has_end[MAX_PROCESSES];
+    timeline_entry *entry = NULL;
+    while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
+      if (entry->action == ACTION_END)
+        has_end[entry->sim_pid] = true;
+    while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
+      if (entry->action == ACTION_END)
+        has_end[entry->sim_pid] = true;
+    int end_missing_count = 0;
+    for (int it = 0; it < MAX_PROCESSES; it++)
+      if (!has_end[it])
+        end_missing_count++, printf($red"Error in plan! Process %d does not have an END statement"$cdef, it);
+    if (end_missing_count > 0)
+    {
+      printf($red"%d processes missing the END statement"$cdef, end_missing_count);
+      exit(1);
+    }
+  }
 
+  // checking for plan execution errors
   if (time > 0)
   {
     // looking for actions planed for the previous time
@@ -101,7 +158,15 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
           device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
           action_name = (*device)->name;
         }
-        printf("Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d", entry->time, action_name, entry->sim_pid);
+        printf($red"Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d"$cdef, entry->time, action_name, entry->sim_pid);
+
+        // skipping over an END action is fatal,
+        // it could causa an infinite loop in the simulation
+        if (entry->action == ACTION_END)
+        {
+          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation"$cdef);
+          exit(1);
+        }
       }
     }
     while ((entry = (timeline_entry *)utarray_next(data->proc_timeline, entry)))
@@ -120,12 +185,20 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
           device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
           action_name = (*device)->name;
         }
-        printf("Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'", entry->sim_pid, entry->time, action_name);
+        printf($red"Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'"$cdef, entry->sim_pid, entry->time, action_name);
+
+        // skipping over an END action is fatal,
+        // it could causa an infinite loop in the simulation
+        if (entry->action == ACTION_END)
+        {
+          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation"$cdef);
+          exit(1);
+        }
       }
     }
   }
 
-  // checking if simulation can continue at the current state and time
+  // checking if simulation will stop at the current state and time
   // - no new processes will be created
   // - all created processes are dead
   timeline_entry *entry = NULL;
@@ -136,6 +209,19 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
     if (!data->sim_procs[itP].dead)
       return true;
   return false;
+}
+int plan_txt_get_swap_device(simulation_plan *plan)
+{
+  txt_sim_data *data = (txt_sim_data *)plan->data;
+  device_entry **p = NULL;
+  while ((p = (device_entry **)utarray_next(data->devices, p)))
+  {
+    if (strcmp(data->swap_device_name, (*p)->name) == 0)
+    {
+      return utarray_eltidx(data->devices, p);
+    }
+  }
+  return -1;
 }
 int plan_txt_incoming_processes(simulation_plan *plan, int time)
 {
@@ -320,26 +406,45 @@ bool read_string(char **code, const char *str)
   (*code) += it;
   return true;
 }
-bool match_head(char *code, char *name, int *value)
+int match_head(char *code, char *name, int *value, char *param1, int *param1_value)
 {
+  int count = 0;
   int ret_value = 0;
+  int param1_ret_value = 0;
   code += match_spaces(code);
   if (!read_char(&code, '['))
-    return false;
+    return 0;
   code += match_spaces(code);
   if (!read_string(&code, name))
-    return false;
+    return 0;
   code += match_spaces(code);
   code += match_numbers(code, &ret_value);
+  count++;
+  if (param1 != NULL)
+  {
+    code += match_spaces(code);
+    if (read_string(&code, param1))
+    {
+      code += match_spaces(code);
+      code += match_numbers(code, &param1_ret_value);
+      count++;
+    }
+  }
   code += match_spaces(code);
   if (!read_char(&code, ']'))
-    return false;
-  if (value)
+    return 0;
+  
+  // setting out params and returning
+  if (value != NULL)
     *value = ret_value;
-  return true;
+  if (param1_value != NULL)
+    *param1_value = param1_ret_value;
+  return count;
 }
-bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, int *num4)
+int match_entry(char *code, int *num1, char **str2, int *str2_len, int *num3, int *num4)
 {
+  int count = 0;
+
   int ret_num1 = 0;
   char *ret_str2 = 0;
   int ret_num3 = 0;
@@ -350,8 +455,8 @@ bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, in
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num1);
-    if (num_len == 0)
-      return false;
+    if (num_len > 0)
+      count++;
     code += num_len;
   }
 
@@ -363,8 +468,8 @@ bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, in
     ret_str_len = match_non_spaces(code);
     ret_str2 = code;
     code += ret_str_len;
-    if (ret_str_len <= 0)
-      return false;
+    if (ret_str_len > 0)
+      count++;
   }
 
   if (num3 != NULL)
@@ -372,8 +477,8 @@ bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, in
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num3);
-    if (num_len == 0)
-      return false;
+    if (num_len > 0)
+      count++;
     code += num_len;
   }
 
@@ -382,26 +487,102 @@ bool match_entry(char *code, int *num1, char **str2, int *str_len, int *num3, in
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num4);
-    if (num_len == 0)
-      return false;
+    if (num_len > 0)
+      count++;
     code += num_len;
   }
+
+  if (code[0] != 0)
+    return 0;
 
   if (num1 != NULL)
     *num1 = ret_num1;
   if (str2 != NULL)
   {
     *str2 = ret_str2;
-    if (str_len != NULL)
-      *str_len = ret_str_len;
+    if (str2_len != NULL)
+      *str2_len = ret_str_len;
   }
   if (num3 != NULL)
     *num3 = ret_num3;
   if (num4 != NULL)
     *num4 = ret_num4;
 
+  return count;
+}
+
+bool match_os_entry(char *code, char **out_name, int *out_name_length, int *out_type, int *out_num_value, char **out_str_value, int *out_str_value_length)
+{
+  if (code == NULL)
+    error("match_os_entry: code cannot be null");
+  if (out_name == NULL)
+    error("match_os_entry: out_name cannot be null");
+  if (out_name_length == NULL)
+    error("match_os_entry: out_name_length cannot be null");
+  if (out_num_value == NULL)
+    error("match_os_entry: out_num_value cannot be null");
+  if (out_str_value == NULL)
+    error("match_os_entry: out_str_value cannot be null");
+  if (out_str_value_length == NULL)
+    error("match_os_entry: out_str_value_length cannot be null");
+
+  char *name = NULL;
+  int name_length = -1;
+  bool has_num_value;
+  int num_value;
+  int num_len;
+  bool has_str_value;
+  char *str_value;
+  int str_value_length;
+
+  code += match_spaces(code);
+
+  name_length = match_non_spaces(code);
+  name = code;
+  code += name_length;
+  if (name_length <= 0)
+    return false;
+
+  code += match_spaces(code);
+
+  // trying to parse a number value
+  num_len = match_numbers(code, &num_value);
+  has_num_value = (num_len > 0);
+  code += num_len;
+
+  // try a string value, but only if there is no number value
+  if (!has_num_value)
+  {
+    str_value_length = match_non_spaces(code);
+    str_value = code;
+    code += str_value_length;
+    has_str_value = (str_value_length > 0);
+  }
+
+  // must be at end of string
+  if (code[0] != 0)
+    return false;
+
+  if (!has_num_value && !has_str_value)
+    return false;
+
+  // setting out params
+  *out_name = name;
+  *out_name_length = name_length;
+  if (has_num_value)
+  {
+    *out_type = 1;
+    *out_num_value = num_value;
+  }
+  if (has_str_value)
+  {
+    *out_type = 2;
+    *out_str_value = str_value;
+    *out_str_value_length = str_value_length;
+  }
   return true;
 }
+
 void plan_txt_dispose(simulation_plan *plan)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
@@ -411,6 +592,7 @@ void plan_txt_dispose(simulation_plan *plan)
   utarray_free(data->proc_timeline);
 
   map_dispose(&data->pid_map);
+  safe_free(data->sim_proc_meta, data);
   safe_free(data->sim_procs, data);
   safe_free(plan->data, plan);
 }
@@ -444,6 +626,8 @@ void plan_txt_get_os_settings(simulation_plan *plan, plan_os_settings *out)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
   out->time_slice = data->time_slice;
+  out->max_working_set = data->max_working_set;
+  out->memory_frames = data->memory_frames;
 }
 void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
 {
@@ -629,8 +813,16 @@ void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
   // printing line end
   printf("\n");
 }
+
 UT_icd device_entry_ptr_icd = {sizeof(device_entry *), 0, 0, 0};
 UT_icd timeline_entry_ptr_icd = {sizeof(timeline_entry), 0, 0, 0};
+
+#define PARSE_MODE_NONE 0
+#define PARSE_MODE_DEVICE 1
+#define PARSE_MODE_TIMELINE 2
+#define PARSE_MODE_PROCESS 3
+#define PARSE_MODE_OS 4
+
 void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 {
   txt_sim_data *data = safe_malloc(sizeof(txt_sim_data), plan);
@@ -640,6 +832,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   data->sim_procs = safe_malloc(max_sim_procs * sizeof(txt_sim_proc), data);
   data->time_slice = 4; // default time_slice is 4
   map_init(&data->pid_map, max_sim_procs, max_sim_procs * 3 / 4, 0.75f);
+  data->sim_proc_meta = safe_malloc(sizeof(sim_proc_metadata)*MAX_PROCESSES, data);
 
   // we are going to read all the txt file at
   // once and fill a struct with the data
@@ -656,12 +849,19 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
 
   char line[1001];
   line[1000] = 0;
-  int mode = 0;
+  int mode = PARSE_MODE_NONE;
   int current_sim_pid = 0;
-  int num1;
+
+  // variables used as outputs for the parse functions
+  char *str1;
+  int str1_len;
   char *str2;
+  int str2_len;
+  int num1;
+  int num2;
   int num3;
   int num4;
+  int param_count;
 
   // reading the file stream
   // - empty lines and comments after char '#' are ignored
@@ -675,8 +875,11 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   while (fgets(line, 1000, fptr))
   {
     char *trimmed = trim(line);
-    int str_len;
-    if (mode == 1 && match_entry(line, 0, &str2, &str_len, &num3, &num4))
+    if (trimmed[0] == '\0')
+    {
+      // empty line
+    }
+    else if (mode == PARSE_MODE_DEVICE && match_entry(line, 0, &str2, &str2_len, &num3, &num4) == 4)
     {
       if (num3 >= 0 && num4 >= 0)
       {
@@ -684,9 +887,9 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         device_entry **entry = (device_entry **)utarray_back(data->devices);
         *entry = safe_malloc(sizeof(device_entry), data->devices);
 
-        char *str_new = safe_malloc(str_len + 1, *entry);
-        strncpy(str_new, str2, str_len);
-        str_new[str_len] = 0;
+        char *str_new = safe_malloc(str2_len + 1, *entry);
+        strncpy(str_new, str2, str2_len);
+        str_new[str2_len] = 0;
 
         // creating the device entry, and then adding to the array
         (*entry)->name = str_new;
@@ -694,30 +897,35 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         (*entry)->return_queue = num4;
       }
     }
-    else if (mode == 2 && match_entry(line, &num1, &str2, &str_len, &num3, 0))
+    else if (mode == PARSE_MODE_TIMELINE && (param_count = match_entry(line, &num1, &str2, &str2_len, &num3, &num4)) >= 3)
     {
       // 1
       int time = num1;
       // 2
-      char *str_new = safe_malloc(str_len + 1, NULL);
-      strncpy(str_new, str2, str_len);
-      str_new[str_len] = 0;
+      char *str_new = safe_malloc(str2_len + 1, NULL);
+      strncpy(str_new, str2, str2_len);
+      str_new[str2_len] = 0;
       // 3
       int sim_pid = num3;
 
-      int action_id;
+      int action_id = 0;
       int device_id = -1;
-      if (strcmp("new", str_new) == 0)
+      if (param_count == 3 && strcmp("new", str_new) == 0)
       {
         action_id = ACTION_NEW;
         device_id = 0;
       }
-      else if (strcmp("end", str_new) == 0)
+      else if (param_count == 3 && strcmp("end", str_new) == 0)
       {
         action_id = ACTION_END;
         device_id = 0;
       }
-      else
+      else if (param_count == 4 && strcmp("mem", str_new) == 0)
+      {
+        action_id = ACTION_ACCESS_MEMORY;
+        device_id = 0;
+      }
+      else if (param_count == 3)
       {
         device_entry **p = NULL;
         while ((p = (device_entry **)utarray_next(data->devices, p)))
@@ -733,39 +941,47 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       safe_free(str_new, NULL);
 
       // creating the timeline entry, and then adding to the array
-      if (time >= 0 && action_id >= 0 && device_id >= 0 && sim_pid >= 0)
+      if (time >= 0 && action_id > 0 && device_id >= 0 && sim_pid >= 0)
       {
-        timeline_entry entry;
-        entry.time = time;
-        entry.action = action_id;
-        entry.device_id = device_id;
-        entry.sim_pid = sim_pid;
-        entry.done = false;
-        utarray_push_back(data->global_timeline, &entry);
+        timeline_entry new_entry;
+        new_entry.time = time;
+        new_entry.action = action_id;
+        new_entry.device_id = device_id;
+        new_entry.sim_pid = sim_pid;
+        new_entry.param1 = num4;
+        new_entry.is_copy = false;
+        new_entry.done = false;
+        data->sim_proc_meta[new_entry.sim_pid].copy_of = -1;
+        utarray_push_back(data->global_timeline, &new_entry);
       }
     }
-    else if (mode == 3 && match_entry(line, &num1, &str2, &str_len, 0, 0))
+    else if (mode == PARSE_MODE_PROCESS && (param_count = match_entry(line, &num1, &str2, &str2_len, &num3, 0)) >= 2)
     {
       // 1
       int time = num1;
       // 2
-      char *str_new = safe_malloc(str_len + 1, NULL);
-      strncpy(str_new, str2, str_len);
-      str_new[str_len] = 0;
+      char *str_new = safe_malloc(str2_len + 1, NULL);
+      strncpy(str_new, str2, str2_len);
+      str_new[str2_len] = 0;
 
-      int action_id;
+      int action_id = 0;
       int device_id = -1;
-      if (strcmp("new", str_new) == 0)
+      if (param_count == 2 && strcmp("new", str_new) == 0)
       {
         action_id = ACTION_NEW;
         device_id = 0;
       }
-      else if (strcmp("end", str_new) == 0)
+      else if (param_count == 2 && strcmp("end", str_new) == 0)
       {
         action_id = ACTION_END;
         device_id = 0;
       }
-      else
+      else if (param_count == 3 && strcmp("mem", str_new) == 0)
+      {
+        action_id = ACTION_ACCESS_MEMORY;
+        device_id = 0;
+      }
+      else if (param_count == 2)
       {
         device_entry **p = NULL;
         while ((p = (device_entry **)utarray_next(data->devices, p)))
@@ -781,51 +997,90 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       safe_free(str_new, NULL);
 
       // creating the timeline entry, and then adding to the array
-      if (time >= 0 && action_id >= 0 && device_id >= 0 && current_sim_pid >= 0)
+      if (time >= 0 && action_id > 0 && device_id >= 0 && current_sim_pid >= 0)
       {
-        timeline_entry entry;
-        entry.time = time;
-        entry.action = action_id;
-        entry.device_id = device_id;
-        entry.sim_pid = current_sim_pid;
-        entry.done = false;
-        utarray_push_back(data->proc_timeline, &entry);
+        timeline_entry new_entry;
+        new_entry.time = time;
+        new_entry.action = action_id;
+        new_entry.device_id = device_id;
+        new_entry.sim_pid = current_sim_pid;
+        new_entry.param1 = num3;
+        new_entry.is_copy = false;
+        new_entry.done = false;
+        data->sim_proc_meta[new_entry.sim_pid].copy_of = -1;
+        utarray_push_back(data->proc_timeline, &new_entry);
       }
     }
-    else if (mode == 10 && match_entry(line, 0, &str2, &str_len, &num3, 0))
+    else if (mode == PARSE_MODE_OS && match_os_entry(line, &str1, &str1_len, &num1, &num2, &str2, &str2_len))
     {
-      char *str_new = safe_malloc(str_len + 1, NULL);
-      strncpy(str_new, str2, str_len);
-      str_new[str_len] = 0;
+      const enum ValueType { Number = 1, String = 2 } value_type = num1;
 
-      if (strcmp("time_slice", str_new) == 0)
-        data->time_slice = num3;
+      char *str_name = safe_malloc(str1_len + 1, NULL);
+      strncpy(str_name, str1, str1_len);
+      str_name[str1_len] = 0;
 
-      safe_free(str_new, NULL);
+      char *str_value = NULL;
+      if (value_type == String)
+      {
+        str_value = safe_malloc(str2_len + 1, data);
+        strncpy(str_value, str2, str2_len);
+        str_value[str2_len] = 0;
+      }
+
+      if (value_type == Number && strcmp("time_slice", str_name) == 0)
+        data->time_slice = num2;
+      else if (value_type == Number && strcmp("memory_frames", str_name) == 0)
+        data->memory_frames = num2;
+      else if (value_type == Number && strcmp("max_working_set", str_name) == 0)
+        data->max_working_set = num2;
+      else if (value_type == String && strcmp("swap_device", str_name) == 0)
+      {
+        data->swap_device_name = str_value;
+        str_value = NULL;
+      }
+
+      if (str_value != NULL)
+        safe_free(str_value, NULL);
+      safe_free(str_name, NULL);
     }
-    else if (trimmed[0] == '\0')
+    else if (match_head(trimmed, "devices", 0, 0, 0))
     {
-      // empty line
+      mode = PARSE_MODE_DEVICE;
     }
-    else if (match_head(trimmed, "devices", 0))
+    else if (match_head(trimmed, "timeline", 0, 0, 0))
     {
-      mode = 1;
+      mode = PARSE_MODE_TIMELINE;
     }
-    else if (match_head(trimmed, "timeline", 0))
+    else if (num1 = match_head(trimmed, "process", &current_sim_pid, "copy", &num2))
     {
-      mode = 2;
+      mode = PARSE_MODE_PROCESS;
+      if (num1 == 2)
+      {
+        const int copy_sim_pid = num2;
+        // copying all items from the indicated process
+        int len = utarray_len(data->proc_timeline);
+        for (int it = 0; it < len; it++)
+        {
+          timeline_entry *entry = (timeline_entry *)utarray_eltptr(data->proc_timeline, it);
+          if (entry->sim_pid == copy_sim_pid)
+          {
+            timeline_entry new_entry = *entry;
+            new_entry.sim_pid = current_sim_pid;
+            new_entry.is_copy = true;
+            data->sim_proc_meta[new_entry.sim_pid].copy_of = copy_sim_pid;
+            utarray_push_back(data->proc_timeline, &new_entry);
+          }
+        }
+      }
     }
-    else if (match_head(trimmed, "process", &current_sim_pid))
+    else if (match_head(trimmed, "os", 0, 0, 0))
     {
-      mode = 3;
-    }
-    else if (match_head(trimmed, "os", &current_sim_pid))
-    {
-      mode = 10;
+      mode = PARSE_MODE_OS;
     }
   }
   fclose(fptr);
 
+  plan->get_swap_device = &plan_txt_get_swap_device;
   plan->print_time_final_state = &plan_txt_print_time_final_state;
   plan->get_os_settings = &plan_txt_get_os_settings;
   plan->set_time = &plan_txt_set_time;
