@@ -3,12 +3,14 @@
 #include <stdlib.h>
 #include "os.h"
 #include "ansi_console.h"
-#include "ansi_colors.h"
 #include "sim_plan_txt.h"
 #include "uthash.h"
 #include "safe_alloc.h"
 
 #include "config.h"
+
+#define COLORS_ALL
+#include "ansi_colors.h"
 
 #define LOG_PROC_NEW "proc-new"
 #define LOG_PROC_END "proc-end"
@@ -37,6 +39,9 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
   {
     printf("[os]\n");
     printf("  time_slice %d\n", data->time_slice);
+    printf("  memory_frames %d\n", data->memory_frames);
+    printf("  max_working_set %d\n", data->max_working_set);
+    printf("  swap_device_name %s\n", data->swap_device_name);
     device_entry **device = NULL;
     for (int index = 0; (device = (device_entry **)utarray_next(data->devices, device)); index++)
     {
@@ -230,12 +235,18 @@ int plan_txt_get_swap_device(simulation_plan *plan)
 int plan_txt_incoming_processes(simulation_plan *plan, int time)
 {
   txt_sim_data *data = (txt_sim_data *)plan->data;
-  int count = 0;
+
+  if (data->sim_proc_count >= MAX_PROCESSES)
+    return 0;
 
   // it is only possible to start new processes from the global timeline sections
+  int count = 0;
   timeline_entry *entry = NULL;
   while ((entry = (timeline_entry *)utarray_next(data->global_timeline, entry)))
   {
+    if (data->sim_proc_count >= MAX_PROCESSES)
+      break;
+
     if (entry->time == time && !entry->done && entry->action == ACTION_NEW)
     {
       int sim_pid = data->sim_proc_count;
@@ -274,6 +285,13 @@ void plan_txt_create_process(simulation_plan *plan, int time, int pid)
     if (sim_proc->pid == 0)
       break;
   }
+
+  if (sim_pid == data->sim_proc_count)
+  {
+    printf($red "Error! Cannot create more processes than " text(MAX_PROCESSES) "." $cdef);
+    exit(1);
+  }
+
   map_insert(&data->pid_map, pid, sim_pid);
 
   // filling the new sim_proc data:
@@ -368,6 +386,15 @@ int plan_txt_request_io(simulation_plan *plan, int time, int pid)
   entry->done = true;
   return entry->device_id;
 }
+bool plan_txt_execute_memory(simulation_plan *plan, int time, int pid, unsigned int *pc)
+{
+  timeline_entry *entry = find_entry(plan, time, pid, ACTION_ACCESS_MEMORY);
+  if (entry == NULL)
+    return false;
+  entry->done = true;
+  *pc = entry->param1;
+  return true;
+}
 int match_spaces(char *code)
 {
   char *ptr2 = code;
@@ -448,52 +475,65 @@ int match_head(char *code, char *name, int *value, char *param1, int *param1_val
 int match_entry(char *code, int *num1, char **str2, int *str2_len, int *num3, int *num4)
 {
   int count = 0;
+  bool failed_any = false;
 
   int ret_num1 = 0;
   char *ret_str2 = 0;
   int ret_num3 = 0;
   int ret_num4 = 0;
 
-  if (num1 != NULL)
+  if (num1 != NULL && !failed_any)
   {
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num1);
+    code += num_len;
+
     if (num_len > 0)
       count++;
-    code += num_len;
+    else
+      failed_any = true;
   }
 
   int ret_str_len = -1;
-  if (str2 != NULL)
+  if (str2 != NULL && !failed_any)
   {
     code += match_spaces(code);
 
     ret_str_len = match_non_spaces(code);
     ret_str2 = code;
     code += ret_str_len;
+
     if (ret_str_len > 0)
       count++;
+    else
+      failed_any = true;
   }
 
-  if (num3 != NULL)
+  if (num3 != NULL && !failed_any)
   {
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num3);
+    code += num_len;
+
     if (num_len > 0)
       count++;
-    code += num_len;
+    else
+      failed_any = true;
   }
 
-  if (num4 != NULL)
+  if (num4 != NULL && !failed_any)
   {
     code += match_spaces(code);
 
     int num_len = match_numbers(code, &ret_num4);
+    code += num_len;
+
     if (num_len > 0)
       count++;
-    code += num_len;
+    else
+      failed_any = true;
   }
 
   if (code[0] != 0)
@@ -883,7 +923,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
     {
       // empty line
     }
-    else if (mode == PARSE_MODE_DEVICE && match_entry(line, 0, &str2, &str2_len, &num3, &num4) == 4)
+    else if (mode == PARSE_MODE_DEVICE && match_entry(trimmed, 0, &str2, &str2_len, &num3, &num4) == 3)
     {
       if (num3 >= 0 && num4 >= 0)
       {
@@ -901,7 +941,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         (*entry)->return_queue = num4;
       }
     }
-    else if (mode == PARSE_MODE_TIMELINE && (param_count = match_entry(line, &num1, &str2, &str2_len, &num3, &num4)) >= 3)
+    else if (mode == PARSE_MODE_TIMELINE && (param_count = match_entry(trimmed, &num1, &str2, &str2_len, &num3, &num4)) >= 3)
     {
       // 1
       int time = num1;
@@ -959,7 +999,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         utarray_push_back(data->global_timeline, &new_entry);
       }
     }
-    else if (mode == PARSE_MODE_PROCESS && (param_count = match_entry(line, &num1, &str2, &str2_len, &num3, 0)) >= 2)
+    else if (mode == PARSE_MODE_PROCESS && (param_count = match_entry(trimmed, &num1, &str2, &str2_len, &num3, 0)) >= 2)
     {
       // 1
       int time = num1;
@@ -1015,7 +1055,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         utarray_push_back(data->proc_timeline, &new_entry);
       }
     }
-    else if (mode == PARSE_MODE_OS && match_os_entry(line, &str1, &str1_len, &num1, &num2, &str2, &str2_len))
+    else if (mode == PARSE_MODE_OS && match_os_entry(trimmed, &str1, &str1_len, &num1, &num2, &str2, &str2_len))
     {
       const enum ValueType { Number = 1, String = 2 } value_type = num1;
 
@@ -1094,5 +1134,6 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   plan->run_one_time_unit = &plan_txt_run_one_time_unit;
   plan->requires_io = &plan_txt_request_io;
   plan->create_device = &plan_txt_create_device;
+  plan->execute_memory = &plan_txt_execute_memory;
   plan->dispose = &plan_txt_dispose;
 }

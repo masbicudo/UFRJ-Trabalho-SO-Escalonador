@@ -17,4 +17,6 @@ static void setANSI() {
 void setANSI() { }
 #endif
 
+#define text(s) #s
+
 #endif

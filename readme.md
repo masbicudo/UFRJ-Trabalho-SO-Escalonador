@@ -75,3 +75,4 @@
 - frames executing or being swapped-in/ou are marked as in_use
 - each frame/page is 4KB
 - the processing unit is a process, there is no threads
+- the OS will reserve the 5 first frames for itself

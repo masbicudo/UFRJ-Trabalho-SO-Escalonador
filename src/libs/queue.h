@@ -15,5 +15,7 @@ void queue_dispose(queue* pq);
 int queue_enqueue(queue* pq, void* process);
 int queue_dequeue(queue* pq, void** out);
 int queue_get(queue* pq, int index, void** out);
+int queue_rev_dequeue(queue* pq, void* process);
+int queue_rev_enqueue(queue* pq, void** out);
 
 #endif

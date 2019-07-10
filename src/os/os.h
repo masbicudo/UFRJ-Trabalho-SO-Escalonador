@@ -20,12 +20,14 @@ typedef struct device device;
 #define PROC_STATE_RUNNING 5
 #define PROC_STATE_EXIT 6
 
-#define PROC_STATE_WAITING_PAGE 7 // waiting for a page to be loaded from disk
+#define PROC_STATE_BLOCKED_SWAPPING 7 // waiting for a page to be loaded from disk
+#define PROC_STATE_READY_SWAPPING 8 // it is on a ready queue, but is now being swapped out to disk
 
 
 #define OP_NONE 0
 #define OP_PAGE_LOAD 1
 #define OP_PAGE_LOADED 2
+#define OP_SWAP_OUT 3
 
 typedef struct page_table_entry page_table_entry;
 typedef struct process process;
@@ -49,6 +51,8 @@ typedef struct storage_device_operation
 {
     int page_number;  // number of the page that will be loaded
     int frame_number; // number of the frame to use
+    device *device;   // device that is the target of the operation
+    int device_addr;  // this is not used because we don't simulate this
 
 } storage_device_operation;
 
@@ -109,6 +113,7 @@ typedef struct os
     // global information
     int max_processes;
     int max_working_set;
+    int max_devices;
     int time_slice;
 
     // memory management
@@ -145,6 +150,8 @@ static inline void pq_dispose(process_queue *pq) { queue_dispose((queue *)pq); }
 static inline int pq_enqueue(process_queue *pq, process *item) { return queue_enqueue((queue *)pq, (void *)item); }
 static inline int pq_dequeue(process_queue *pq, process **out) { return queue_dequeue((queue *)pq, (void **)out); }
 static inline int pq_get(process_queue *pq, int index, process **out) { return queue_get((queue *)pq, index, (void **)out); }
+static inline int pq_rev_enqueue(process_queue *pq, process **out) { return queue_rev_enqueue((queue *)pq, (void **)out); }
+static inline int pq_rev_dequeue(process_queue *pq, process *item) { return queue_rev_dequeue((queue *)pq, (void *)item); }
 
 int scheduler_init(scheduler *scheduler, int queue_capacity, int num_queues);
 void scheduler_dispose(scheduler *scheduler);
@@ -155,12 +162,13 @@ void device_dispose(device *device);
 int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice);
 void os_dispose(os *os);
 
-int enqueue_on_device(int time, device *device, process *process);
+int exec_on_device(int time, os *os, device *device, process *process);
+int enqueue_on_device(int time, os *os, device *device, process *process);
 int select_next_process(scheduler *scheduler, process **out);
 
 int process_init(process *p, int pid, int max_page_table_size, int max_working_set);
 void process_dispose(process *process);
 
-void storage_device_find_free_frame();
+int os_find_free_frame(os *os);
 
 #endif

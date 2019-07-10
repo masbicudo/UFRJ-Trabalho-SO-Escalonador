@@ -49,3 +49,30 @@ int queue_get(queue *pq, int index, void **out)
     *out = pq->items[(pq->current + index) % pq->capacity];
     return OK;
 }
+
+int queue_rev_dequeue(queue *pq, void *item)
+{
+    if (pq->count == pq->capacity)
+        return ERR_QUEUE_FULL;
+
+    int index = pq->current - 1;
+    if (index < 0) index += pq->capacity;
+    pq->items[index] = item;
+    pq->current = index;
+    pq->count++;
+
+    return OK;
+}
+
+int queue_rev_enqueue(queue *pq, void **out)
+{
+    if (pq->count == 0)
+        return ERR_QUEUE_EMPTY;
+
+    int index = pq->current + pq->count - 1;
+    index = index < 0 ? index + pq->capacity : index % pq->capacity;
+    *out = pq->items[index];
+    pq->count--;
+
+    return OK;
+}

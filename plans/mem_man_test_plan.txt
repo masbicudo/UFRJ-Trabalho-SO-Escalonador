@@ -23,7 +23,7 @@
 
 [ os ]
   time_slice         4
-  memory_frames      4
+  memory_frames      10 # the OS will reserve 5 frames for itself
   max_working_set    3
   swap_device       disk
 
