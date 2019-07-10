@@ -41,7 +41,7 @@ typedef struct page_table_entry
     bool is_on_memory;
     bool is_on_disk;
     int frame;
-    int last_access;
+    int last_access; // real hardware set a bit to indicate that the page was used
 
 } page_table_entry;
 
@@ -109,6 +109,7 @@ typedef struct os
     // global information
     int max_processes;
     int max_working_set;
+    int time_slice;
 
     // memory management
     int frame_count;
@@ -136,6 +137,7 @@ typedef struct process_queue
     int current;
     int count;
     int capacity;
+
 } process_queue;
 
 static inline int pq_init(process_queue *pq, int capacity) { return queue_init((queue *)pq, capacity); }
@@ -150,13 +152,13 @@ void scheduler_dispose(scheduler *scheduler);
 int device_init(device *device, char *name, int job_duration, int ret_queue, int proc_queue_size);
 void device_dispose(device *device);
 
-int os_init(os *os, int max_devices, int max_processes, int max_priority_level);
+int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice);
 void os_dispose(os *os);
 
 int enqueue_on_device(int time, device *device, process *process);
 int select_next_process(scheduler *scheduler, process **out);
 
-int process_init(process *p, int pid);
+int process_init(process *p, int pid, int max_page_table_size, int max_working_set);
 void process_dispose(process *process);
 
 void storage_device_find_free_frame();

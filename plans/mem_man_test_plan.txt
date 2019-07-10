@@ -23,8 +23,8 @@
 
 [ os ]
   time_slice         4
-  memory_frames     14 # with 4 processes * 4 pages this will cause major process swap-outs
-  max_working_set    4
+  memory_frames      4
+  max_working_set    3
   swap_device       disk
 
 [ devices ] # this section must come before the others
@@ -37,9 +37,6 @@
 [ timeline ]
   0     new     0
   3     new       1
-  6     new         2
-  9     new           3
-  12    new             4
 
 [ process 0 ]
   # The first read of a process if triggered by the OS to read the entry point at page 0.
@@ -60,9 +57,3 @@
   # when specifying the copy argument, this process will have the same instructions
   # at the same relative times as the copied process...
   # note that it is still possible to add more instructions here
-
-[ process 2 copy 1 ]
-
-[ process 3 copy 2 ]
-
-[ process 4 copy 3 ]

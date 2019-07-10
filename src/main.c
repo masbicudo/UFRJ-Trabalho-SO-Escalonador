@@ -24,10 +24,8 @@ bool ispowerof2(unsigned int x)
   return x && !(x & (x - 1));
 }
 
-int main()
+void print_constants()
 {
-  setANSI();
-
   int err = 0;
   printf($web_orange"CPU and Memory managers simulator"$cdef"\n");
   printf("\n");
@@ -48,13 +46,16 @@ int main()
   else
     log_val_i(MAX_SUPPORTED_FRAMES, 23, "maximum number of frames, indicates the maximum amount of RAM that can be installed");
   log_val_i(MAX_WORKING_SET, 23, "invariant maximum working set");
+  log_val_i(MAX_PAGE_TABLE_SIZE, 23, "size of the page table for each process, it defines the virtual memory address space size");
   if (err > 0)
   {
     printf("  "$red"%d"$cdef" errors occured!", err);
     exit(1);
   }
+}
 
-  simulation_plan *plan = safe_malloc(sizeof(simulation_plan), NULL);
+void get_simulation_plan(simulation_plan* plan)
+{
   if (0)
   {
     // initialized a random execution plan
@@ -71,54 +72,70 @@ int main()
   {
     plan_txt_init(plan, "plans/mem_man_test_plan.txt", MAX_PROCESSES);
   }
+}
 
-  plan_os_settings conf;
-  (*plan->get_os_settings)(plan, &conf);
-  int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
-  int max_working_set = clamp(conf.max_working_set, 0, MAX_WORKING_SET);
-  int memory_frames = clamp(conf.memory_frames, 0, MAX_SUPPORTED_FRAMES);
-  const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
+int main()
+{
+  setANSI();
+  print_constants();
+  simulation_plan *plan = safe_malloc(sizeof(simulation_plan), NULL);
+  get_simulation_plan(plan);
 
-  printf("\n");
-  printf($web_skyblue"Settings:"$cdef"\n");
-  log_val_i(time_slice, 10, "");
+  os *os = safe_malloc(sizeof(struct os), NULL);;
 
-  //  it is here because the plan does not know how many queues the OS have for the CPU
-  //  it's a matter of leting the plan devine the number of queues
-  // allowing the sim plan to print something before starting
-  // - set_time: is used to show global plan information (print the whole plan if possible)
-  // - print_time_final_state: is used to show the headers of the info that will be printed at the end of each iteration
-  printf("\n");
-  printf($web_skyblue"Plan info:"$cdef"\n");
-  if (plan->set_time != NULL)
-    if (!(*plan->set_time)(plan, -1, NULL))
-      return 0;
-
-  // initializing OS structure
-  os *os = safe_malloc(sizeof(struct os), NULL);
-  os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL);
-
-  for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)
   {
-    sim_plan_device dev;
-    if (plan->create_device(plan, itdev, &dev))
-      device_init(os->devices + itdev, dev.name, dev.job_duration, dev.ret_queue, MAX_PROCESSES);
-    else
-      (os->devices + itdev)->is_connected = false;
+    plan_os_settings conf;
+    (*plan->get_os_settings)(plan, &conf);
+    int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
+    int max_working_set = clamp(conf.max_working_set, 0, MAX_WORKING_SET);
+    int memory_frames = clamp(conf.memory_frames, 0, MAX_SUPPORTED_FRAMES);
+    const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
+
+    printf("\n");
+    printf($web_skyblue "Settings:" $cdef "\n");
+    log_val_i(time_slice, 10, "");
+
+    //  it is here because the plan does not know how many queues the OS have for the CPU
+    //  it's a matter of leting the plan devine the number of queues
+    // allowing the sim plan to print something before starting
+    // - set_time: is used to show global plan information (print the whole plan if possible)
+    // - print_time_final_state: is used to show the headers of the info that will be printed at the end of each iteration
+    printf("\n");
+    printf($web_skyblue "Plan info:" $cdef "\n");
+    if (plan->set_time != NULL)
+      if (!(*plan->set_time)(plan, -1, NULL))
+        return 0;
+
+    // initializing OS structure
+    os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL, max_working_set, memory_frames, time_slice);
+
+    for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)
+    {
+      sim_plan_device dev;
+      if (plan->create_device(plan, itdev, &dev))
+        device_init(os->devices + itdev, dev.name, dev.job_duration, dev.ret_queue, MAX_PROCESSES);
+      else
+        (os->devices + itdev)->is_connected = false;
+    }
+
+    // TODO: move this before OS initialization above
+    printf("\n");
+    printf($web_skyblue "Starting simulation:" $cdef "\n");
+    (*plan->print_time_final_state)(plan, -1, os);
   }
 
-  // TODO: move this before OS initialization above
-  printf("\n");
-  printf($web_skyblue"Starting simulation:"$cdef"\n");
-  (*plan->print_time_final_state)(plan, -1, os);
-
-  scheduler *sch = os->scheduler;
-
-  // TODO: initialize processes randomly
+  //
+  // Main simulation loop
+  //
+  // Simulation loop for things happening inside each time unit.
+  // It is divided in two parts:
+  // - an infinitesimal time at the very beginning of the time unit
+  //    it is here that most of the events happen, and the results
+  //    of this part will tell the state in which the time unit runs
+  // - the time unit run
+  //    represents the program running in the given state for 1 time unit
   int proc_count = 0;
-
   int swap_device = (*plan->get_swap_device)(plan);
-
   for (int time = 0;; time++)
   {
     // telling the current time to the simulation plan
@@ -142,7 +159,7 @@ int main()
         process *new_proc = safe_malloc(sizeof(process), os);
         int pid = os->next_pid++;
         (*plan->create_process)(plan, time, pid);
-        process_init(new_proc, pid);
+        process_init(new_proc, pid, MAX_PAGE_TABLE_SIZE, os->max_working_set);
         pq_enqueue(target_queue, new_proc);
       }
     }
@@ -154,16 +171,16 @@ int main()
     // can be upgraded. Each queue has it's own maximum wait time,
     // each being a multiple of the previous.
     int max_wait_time = 8;
-    for (int itq = 1; itq < sch->queue_count; itq++)
+    for (int itq = 1; itq < os->scheduler->queue_count; itq++)
     {
-      process_queue *queue = sch->queues + itq;
+      process_queue *queue = os->scheduler->queues + itq;
       process *proc = 0;
       if (pq_get(queue, 0, &proc) == OK)
       {
         if (proc->ready_since + max_wait_time < time)
         {
           pq_dequeue(queue, &proc);
-          pq_enqueue(sch->queues + itq - 1, proc);
+          pq_enqueue(os->scheduler->queues + itq - 1, proc);
         }
       }
       max_wait_time = clamp(max_wait_time, 1, INT32_MAX / 8) * 8;
@@ -223,9 +240,9 @@ int main()
           // - normal IO: return queue indicated by the device
           process_queue *queue_to_ret_to;
           if (proc->state == PROC_STATE_WAITING_PAGE)
-            queue_to_ret_to = sch->page_ready_queue;
+            queue_to_ret_to = os->scheduler->page_ready_queue;
           else
-            queue_to_ret_to = sch->queues + device->ret_queue;
+            queue_to_ret_to = os->scheduler->queues + device->ret_queue;
 
           // if the device uses a memory frame, unlock it
           if (st_op->frame_number >= 0)
@@ -275,10 +292,10 @@ int main()
       }
 
       // # Selecting the next process if CPU is available.
-      if (sch->current_process == NULL)
+      if (os->scheduler->current_process == NULL)
       {
         process *proc;
-        if (select_next_process(sch, &proc) == OK)
+        if (select_next_process(os->scheduler, &proc) == OK)
         {
           // check if PC points to a page that is available
           int page_number = proc->pc >> 12; // 4KB is the size of each frame/page
@@ -289,10 +306,10 @@ int main()
           if (pt_entry->is_on_memory)
           {
             // page found
-            printf("Requested page %d, frame %d", page_number, pt_entry->frame);
+            printf("Requested page %d, frame %d\n", page_number, pt_entry->frame);
             proc->state = PROC_STATE_RUNNING;
-            sch->current_process = proc;
-            sch->time_slice_end = time + time_slice;
+            os->scheduler->current_process = proc;
+            os->scheduler->time_slice_end = time + os->time_slice;
           }
           else
           {
@@ -300,8 +317,11 @@ int main()
 
             int free_ws_index = -1;
             for (int itW = 0; itW < os->max_working_set; itW++)
-              if (free_ws_index < 0)
+              if (proc->working_set[itW] >= 0 && free_ws_index < 0)
+              {
                 free_ws_index = itW;
+                break;
+              }
 
             // we need to use a free working-set entry to fill with the needed page data
             if (free_ws_index < 0)
@@ -366,7 +386,7 @@ int main()
                 device *target_device = os->devices + swap_device;
                 enqueue_on_device(time, target_device, proc);
 
-                sch->current_process = NULL;
+                os->scheduler->current_process = NULL;
                 continue;
               }
             }
@@ -386,7 +406,7 @@ int main()
               // adding the process to the wait queue for the device
               device *target_device = os->devices + swap_device;
               enqueue_on_device(time, target_device, proc);
-              sch->current_process = NULL;
+              os->scheduler->current_process = NULL;
               continue;
             }
           }
@@ -394,42 +414,42 @@ int main()
         else
         {
           // if a process was not found we set the running process to NULL
-          sch->current_process = NULL;
+          os->scheduler->current_process = NULL;
         }
       }
 
       // # Checking whether process has finished and disposing of used resources.
-      if (sch->current_process != 0 && (*plan->is_process_finished)(plan, time, sch->current_process->pid))
+      if (os->scheduler->current_process != 0 && (*plan->is_process_finished)(plan, time, os->scheduler->current_process->pid))
       {
-        process_dispose(sch->current_process); // asking the process to dispose it's owned resources
-        safe_free(sch->current_process, os);   // disposing of used memory
-        sch->current_process = NULL;           // freeing cpu
+        process_dispose(os->scheduler->current_process); // asking the process to dispose it's owned resources
+        safe_free(os->scheduler->current_process, os);   // disposing of used memory
+        os->scheduler->current_process = NULL;           // freeing cpu
         continue;
       }
 
       // # Checking whether the running process must be preempted.
-      if (sch->current_process != NULL && sch->time_slice_end == time)
+      if (os->scheduler->current_process != NULL && os->scheduler->time_slice_end == time)
       {
-        process *preempted_proc = sch->current_process;
-        sch->current_process = NULL;
+        process *preempted_proc = os->scheduler->current_process;
+        os->scheduler->current_process = NULL;
         int priority = clamp(preempted_proc->current_priority + 1, 0, MAX_PRIORITY_LEVEL - 1);
         preempted_proc->current_priority = priority;
         preempted_proc->ready_since = time;
-        pq_enqueue(sch->queues + priority, preempted_proc);
+        pq_enqueue(os->scheduler->queues + priority, preempted_proc);
         continue;
       }
 
       // # Checking whether the process wants to do an IO operation.
       // If it wants, then it will release the CPU for another process.
-      if (sch->current_process != NULL)
+      if (os->scheduler->current_process != NULL)
       {
-        int io_requested_device = (*plan->requires_io)(plan, time, sch->current_process->pid);
+        int io_requested_device = (*plan->requires_io)(plan, time, os->scheduler->current_process->pid);
         if (io_requested_device >= 0)
         {
           // moving current process to the device wait queue
           device* target_device = os->devices + io_requested_device;
-          enqueue_on_device(time, target_device, sch->current_process);
-          sch->current_process = NULL;
+          enqueue_on_device(time, target_device, os->scheduler->current_process);
+          os->scheduler->current_process = NULL;
           continue;
         }
       }
@@ -438,13 +458,14 @@ int main()
     }
 
     // # Running the current process.
+    // This represents the act of running a single time unit.
     // increment running process internal duration
-    if (sch->current_process != NULL)
+    if (os->scheduler->current_process != NULL)
     {
-      (*plan->run_one_time_unit)(plan, time, sch->current_process->pid);
+      (*plan->run_one_time_unit)(plan, time, os->scheduler->current_process->pid);
     }
 
-    // writing current state to the console
+    // writing the state at the end of current time unit
     if (time % 2)
       printf($web_steelblue);
     else

@@ -46,14 +46,23 @@
 
 # Limitations
 
-- No check after invoking malloc
-- All queues support max amount of processes
+- No check after invoking malloc,
+    this could cause out of memory bugs.
+
+- All queues support max amount of processes,
+    this is not realistic, it should grow depending on the system load.
+
+- Last access time is not really something that can be done in real hardware,
+    what is done is to set the access bit to 0 every N time units,
+    and check which of them were set to 1 in the mean time.
+    We are not doing this in this simulation...
+    we just store the current time unit on each access.
 
 ## Memory
 - Installed RAM is given in terms of frames, not in terms of bytes
 - Swap size is not specified, we assumed no limits at all
 
-# Assumptions
+## Assumptions
 
 - the program starts always at the virtual address 0
 - the program has no limit to the amount of virtual memory available

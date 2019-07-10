@@ -7,5 +7,6 @@
 
 #define MAX_NUMBER_OF_DEVICES 10  // indicates the maximum number of devices that can be connected to the OS
 
-#define MAX_SUPPORTED_FRAMES 1024 // maximum number of frames, indicates the maximum amount of RAM that can be installed
-#define MAX_WORKING_SET 64        // invariant maximum working set
+#define MAX_SUPPORTED_FRAMES 1024                                 // maximum number of frames, indicates the maximum amount of RAM that can be installed
+#define MAX_WORKING_SET 64                                        // invariant maximum working set
+#define MAX_PAGE_TABLE_SIZE (1024 * 4 / sizeof(page_table_entry)) // size of the page table for each process, it defines the virtual memory address space

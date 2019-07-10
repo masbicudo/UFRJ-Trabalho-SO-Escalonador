@@ -153,18 +153,20 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
           action_name = "new";
         else if (entry->action == ACTION_END)
           action_name = "end";
+        else if (entry->action == ACTION_ACCESS_MEMORY)
+          action_name = "mem";
         else if (entry->action == ACTION_IO)
         {
           device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
           action_name = (*device)->name;
         }
-        printf($red"Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d"$cdef, entry->time, action_name, entry->sim_pid);
+        printf($red"Error in plan! Global timeline entry was skipped: time=%d, action='%s', spid=%d\n"$cdef, entry->time, action_name, entry->sim_pid);
 
         // skipping over an END action is fatal,
         // it could causa an infinite loop in the simulation
         if (entry->action == ACTION_END)
         {
-          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation"$cdef);
+          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation\n"$cdef);
           exit(1);
         }
       }
@@ -175,23 +177,25 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
       if (!entry->done && entry->time < sim_proc->proc_time)
       {
         entry->done = true;
-        char *action_name;
+        char *action_name = NULL;
         if (entry->action == ACTION_NEW)
           action_name = "new";
         else if (entry->action == ACTION_END)
           action_name = "end";
+        else if (entry->action == ACTION_ACCESS_MEMORY)
+          action_name = "mem";
         else if (entry->action == ACTION_IO)
         {
           device_entry **device = (device_entry **)utarray_eltptr(data->devices, entry->device_id);
           action_name = (*device)->name;
         }
-        printf($red"Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'"$cdef, entry->sim_pid, entry->time, action_name);
+        printf($red"Error in plan! Process spid=%d timeline entry was skipped: time=%d, action='%s'\n"$cdef, entry->sim_pid, entry->time, action_name);
 
         // skipping over an END action is fatal,
         // it could causa an infinite loop in the simulation
         if (entry->action == ACTION_END)
         {
-          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation"$cdef);
+          printf($red"Skipping over an END action is fatal, it could cause an infinite loop in the simulation\n"$cdef);
           exit(1);
         }
       }
@@ -885,7 +889,7 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
       {
         utarray_extend_back(data->devices);
         device_entry **entry = (device_entry **)utarray_back(data->devices);
-        *entry = safe_malloc(sizeof(device_entry), data->devices);
+        *entry = safe_malloc(sizeof(device_entry), data);
 
         char *str_new = safe_malloc(str2_len + 1, *entry);
         strncpy(str_new, str2, str2_len);
