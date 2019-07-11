@@ -23,7 +23,7 @@
 
 [ os ]
   time_slice         4
-  memory_frames      64 # the OS will reserve 5 frames for itself
+  memory_frames      16 # the OS will reserve 5 frames for itself
   max_working_set    4
   swap_device       disk
   wait_frame_queue_capacity 1 # only 1 process can be waiting for frames at the same time
@@ -38,6 +38,9 @@
 [ timeline ]
   0     new     0
   3     new       1
+  5     new         2
+  6     new           3
+  8     new             4
 
 [ process 0 ]
   # The first read of a process if triggered by the OS to read the entry point at page 0.
@@ -45,7 +48,6 @@
   # Each read operation has the number of the page that is to be used.
   # If the page/frame mapping is available inside the page table use it.
   # Otherwise, block the process and load the frame from the secondary storage.
-  0     mem  1
   1     mem  46
   2     mem  47
   3     mem  48
@@ -58,3 +60,7 @@
   # when specifying the copy argument, this process will have the same instructions
   # at the same relative times as the copied process...
   # note that it is still possible to add more instructions here
+
+[ process 2 copy 0 ]
+[ process 3 copy 0 ]
+[ process 4 copy 0 ]

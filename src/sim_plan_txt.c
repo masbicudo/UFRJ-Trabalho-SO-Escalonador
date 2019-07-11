@@ -387,13 +387,13 @@ int plan_txt_request_io(simulation_plan *plan, int time, int pid)
   entry->done = true;
   return entry->device_id;
 }
-bool plan_txt_execute_memory(simulation_plan *plan, int time, int pid, unsigned int *pc)
+bool plan_txt_execute_memory(simulation_plan *plan, int time, int pid, int *page_number)
 {
   timeline_entry *entry = find_entry(plan, time, pid, ACTION_ACCESS_MEMORY);
   if (entry == NULL)
     return false;
   entry->done = true;
-  *pc = entry->param1;
+  *page_number = entry->param1;
   return true;
 }
 int match_spaces(char *code)
@@ -1140,4 +1140,5 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
   plan->create_device = &plan_txt_create_device;
   plan->execute_memory = &plan_txt_execute_memory;
   plan->dispose = &plan_txt_dispose;
+  plan->get_sim_pid = &plan_txt_get_sim_pid;
 }

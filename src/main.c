@@ -118,8 +118,10 @@ bool device_next_finished(device *list, device **item, int count, int time)
   return false;
 }
 
-void handle_page_fault(os *os, process *proc, int page_number, int swap_device, int time)
+void handle_page_fault(simulation_plan *plan, os *os, process *proc, int page_number, int swap_device, int time)
 {
+  int spid = (*plan->get_sim_pid)(plan, proc->pid);
+  printf($red"Page fault in process %d page %d\n"$cdef, spid, page_number);
   int free_ws_index = -1;
   for (int itW = 0; itW < os->max_working_set; itW++)
     if (proc->working_set[itW] < 0 && free_ws_index < 0)
@@ -165,7 +167,7 @@ void handle_page_fault(os *os, process *proc, int page_number, int swap_device, 
     // we can now write the frame to disk, and then reuse the frame for another page
     page_table_entry *lru_pt_entry = proc->page_table + lru_pt_index;
     frame_table_entry *lru_frame = os->frame_table + lru_pt_entry->frame;
-    printf("Writing page %d / frame %d to disk, to free page-table entry %d", lru_pt_index, lru_pt_entry->frame, lru_pt_index);
+    printf($green"Writing page %d / frame %d to disk, to free page-table entry %d"$cdef, lru_pt_index, lru_pt_entry->frame, lru_pt_index);
 
     int frame_to_use = lru_pt_entry->frame;
     lru_pt_entry->is_on_memory = false;
@@ -231,7 +233,7 @@ int os_get_freeing_frames_count(os *os, int swap_device)
     }
   }
   process *blk_proc = os->devices[swap_device].current_process;
-  if (blk_proc->pending_op_type == OP_SWAP_OUT)
+  if (blk_proc != NULL && blk_proc->pending_op_type == OP_SWAP_OUT)
   {
     for (int itW = 0; itW < os->max_working_set; itW++)
       if (blk_proc->working_set[itW] < 0)
@@ -315,7 +317,7 @@ int main()
   int swap_device = (*plan->get_swap_device)(plan);
   if (swap_device < 0)
   {
-    printf("Error! Must have a swap device.");
+    printf($red"Error! Must have a swap device."$cdef);
     exit(1);
   }
 
@@ -597,7 +599,7 @@ int main()
           if (pt_entry->is_on_memory)
           {
             // page found
-            printf("Requested page %d, frame %d\n", page_number, pt_entry->frame);
+            printf($web_aliceblue"Execute page found: %d, frame %d\n"$cdef, page_number, pt_entry->frame);
             proc->state = PROC_STATE_RUNNING;
             os->scheduler->current_process = proc;
             os->scheduler->time_slice_end = time + os->time_slice;
@@ -605,7 +607,7 @@ int main()
           else
           {
             // page fault
-            handle_page_fault(os, proc, page_number, swap_device, time);
+            handle_page_fault(plan, os, proc, page_number, swap_device, time);
             // current process is still NULL
             continue;
           }
@@ -618,23 +620,22 @@ int main()
         process *proc;
         while ((proc = os->scheduler->current_process) != NULL)
         {
-          unsigned int pc;
-          if (!(*plan->execute_memory)(plan, time, proc->pid, &pc))
+          int page_number;
+          if (!(*plan->execute_memory)(plan, time, proc->pid, &page_number))
             break;
 
-          proc->pc = pc;
-          int page_number = pc >> 12;
+          proc->pc = page_number * 1024 * 4;
           page_table_entry *pt_entry = proc->page_table + page_number;
           if (pt_entry->is_on_memory)
           {
             // page found
-            printf("Requested page %d, frame %d\n", page_number, pt_entry->frame);
+            printf($web_aliceblue"Execute page found: %d, frame %d\n"$cdef, page_number, pt_entry->frame);
             // process still running, nothing else to do
           }
           else
           {
             // page fault
-            handle_page_fault(os, proc, page_number, swap_device, time);
+            handle_page_fault(plan, os, proc, page_number, swap_device, time);
             os->scheduler->current_process = NULL;
             continue;
           }

@@ -20,7 +20,8 @@ typedef void sim_plan_run_one_time_unit(simulation_plan *plan, int time, int pid
 typedef int sim_plan_requires_io(simulation_plan *plan, int time, int pid);
 typedef bool sim_plan_create_device(simulation_plan *plan, int device_index, sim_plan_device *out);
 typedef void sim_plan_dispose(simulation_plan *plan);
-typedef bool sim_plan_execute_memory(simulation_plan *plan, int time, int pid, unsigned int *pc);
+typedef bool sim_plan_execute_memory(simulation_plan *plan, int time, int pid, int *page_number);
+typedef int sim_plan_get_sim_pid(simulation_plan *plan, int pid);
 
 struct simulation_plan
 {
@@ -37,6 +38,7 @@ struct simulation_plan
   sim_plan_dispose *dispose;
   sim_plan_print_time_final_state *print_time_final_state;
   sim_plan_execute_memory *execute_memory;
+  sim_plan_get_sim_pid *get_sim_pid;
 };
 
 struct sim_plan_device

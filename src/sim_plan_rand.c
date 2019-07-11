@@ -130,7 +130,12 @@ int plan_rand_get_swap_device(simulation_plan *plan)
 {
   return 0; // disk
 }
-bool plan_rand_execute_memory(simulation_plan *plan, int time, int pid, unsigned int *pc)
+int plan_rand_get_sim_pid(simulation_plan *plan, int pid)
+{
+  return pid;
+}
+
+bool plan_rand_execute_memory(simulation_plan *plan, int time, int pid, int *page_number)
 {
   // only access memory every 3 time units
   if (time % 3)
@@ -138,7 +143,7 @@ bool plan_rand_execute_memory(simulation_plan *plan, int time, int pid, unsigned
 
   // randomly select the 5 first pages to execute
   rand_sim_data *data = (rand_sim_data *)plan->data;
-  *pc = drand(data->rng) * 5;
+  *page_number = drand(data->rng) * 5;
   return true;
 }
 void plan_rand_dispose(simulation_plan *plan)
@@ -189,4 +194,5 @@ void plan_rand_init(
   plan->requires_io = &plan_rand_request_io;
   plan->execute_memory = &plan_rand_execute_memory;
   plan->dispose = &plan_rand_dispose;
+  plan->get_sim_pid = &plan_rand_get_sim_pid;
 }
