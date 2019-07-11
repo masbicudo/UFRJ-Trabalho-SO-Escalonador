@@ -113,7 +113,7 @@ bool device_next_finished(device *list, device **item, int count, int time)
   if (*item == NULL)
     *item = list;
   for (; *item < list + count; (*item)++)
-    if ((*item)->is_connected && (*item)->current_job_end == time)
+    if ((*item)->is_connected && (*item)->current_job_end == time && (*item)->current_process != NULL)
       return true;
   return false;
 }

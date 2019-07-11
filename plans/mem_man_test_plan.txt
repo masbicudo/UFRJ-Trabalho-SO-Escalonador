@@ -23,8 +23,8 @@
 
 [ os ]
   time_slice         4
-  memory_frames      10 # the OS will reserve 5 frames for itself
-  max_working_set    3
+  memory_frames      64 # the OS will reserve 5 frames for itself
+  max_working_set    4
   swap_device       disk
   wait_frame_queue_capacity 1 # only 1 process can be waiting for frames at the same time
 

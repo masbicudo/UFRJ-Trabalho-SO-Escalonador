@@ -42,7 +42,7 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
     printf("  memory_frames %d\n", data->memory_frames);
     printf("  max_working_set %d\n", data->max_working_set);
     printf("  swap_device_name %s\n", data->swap_device_name);
-    printf("  wait_frame_queue_capacity %s\n", data->wait_frame_queue_capacity);
+    printf("  wait_frame_queue_capacity %d\n", data->wait_frame_queue_capacity);
     device_entry **device = NULL;
     for (int index = 0; (device = (device_entry **)utarray_next(data->devices, device)); index++)
     {
