@@ -45,7 +45,7 @@ void device_dispose(device *device)
     safe_free(device->blocked_queue, device);
 }
 
-int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice)
+int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice, int wait_frame_queue_capacity)
 {
     os->next_pid = 1;
     os->devices = safe_malloc(max_devices * sizeof(device), os);
@@ -60,11 +60,15 @@ int os_init(os *os, int max_devices, int max_processes, int max_priority_level, 
 
     os->frame_table = safe_malloc(frame_count * sizeof(frame_table_entry), os);
     memset(os->frame_table, 0, frame_count * sizeof(frame_table_entry));
+    os->free_frame_count = frame_count;
     // reserve some frames for the OS
     for (int it = 0; it < 5; it++)
+    {
         os->frame_table[it].used = true;
-    os->wait_frame_queue = safe_malloc(sizeof(process_queue), os);
-    pq_init(os->wait_frame_queue, os->max_processes);
+        os->free_frame_count--;
+    }
+    os->require_frame_queue = safe_malloc(sizeof(process_queue), os);
+    pq_init(os->require_frame_queue, os->max_processes);
 
     os->time_slice = time_slice;
 
@@ -73,8 +77,8 @@ int os_init(os *os, int max_devices, int max_processes, int max_priority_level, 
 
 void os_dispose(os *os)
 {
-    pq_dispose(os->wait_frame_queue);
-    safe_free(os->wait_frame_queue, os);
+    pq_dispose(os->require_frame_queue);
+    safe_free(os->require_frame_queue, os);
     safe_free(os->frame_table, os);
 
     scheduler_dispose(os->scheduler);
@@ -117,6 +121,7 @@ int exec_on_device(int time, os *os, device *device, process *process)
         if (frame < 0)
             return ERR_OUT_OF_MEMORY;
         process->store_op.frame_number = frame;
+        os->free_frame_count--;
         os->frame_table[frame].used = true;
         os->frame_table[frame].locked = true;
     }

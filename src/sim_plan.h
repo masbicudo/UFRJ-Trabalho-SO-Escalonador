@@ -50,6 +50,7 @@ struct plan_os_settings {
   int time_slice;
   int max_working_set;
   int memory_frames;
+  int wait_frame_queue_capacity;
 };
 
 #endif

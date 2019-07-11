@@ -28,6 +28,8 @@ typedef struct device device;
 #define OP_PAGE_LOAD 1
 #define OP_PAGE_LOADED 2
 #define OP_SWAP_OUT 3
+#define OP_SWAP_IN 4
+#define OP_SWAPPED_IN 5
 
 typedef struct page_table_entry page_table_entry;
 typedef struct process process;
@@ -71,6 +73,8 @@ typedef struct process
 
     int pending_op_type;               // operation to do when device respond
     storage_device_operation store_op; // storage operation info
+
+    int *swapout_pages;
 
 } process;
 
@@ -119,8 +123,10 @@ typedef struct os
     // memory management
     int frame_count;
     frame_table_entry *frame_table;
+    int free_frame_count;
+    int freeing_frame_count;
 
-    process_queue *wait_frame_queue;
+    process_queue *require_frame_queue;
 
 } os;
 
@@ -152,6 +158,7 @@ static inline int pq_dequeue(process_queue *pq, process **out) { return queue_de
 static inline int pq_get(process_queue *pq, int index, process **out) { return queue_get((queue *)pq, index, (void **)out); }
 static inline int pq_rev_enqueue(process_queue *pq, process **out) { return queue_rev_enqueue((queue *)pq, (void **)out); }
 static inline int pq_rev_dequeue(process_queue *pq, process *item) { return queue_rev_dequeue((queue *)pq, (void *)item); }
+static inline int pq_count_free(process_queue *pq) { return queue_count_free((queue *)pq); }
 
 int scheduler_init(scheduler *scheduler, int queue_capacity, int num_queues);
 void scheduler_dispose(scheduler *scheduler);
@@ -159,7 +166,7 @@ void scheduler_dispose(scheduler *scheduler);
 int device_init(device *device, char *name, int job_duration, int ret_queue, int proc_queue_size);
 void device_dispose(device *device);
 
-int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice);
+int os_init(os *os, int max_devices, int max_processes, int max_priority_level, int max_working_set, int frame_count, int time_slice, int wait_frame_queue_capacity);
 void os_dispose(os *os);
 
 int exec_on_device(int time, os *os, device *device, process *process);

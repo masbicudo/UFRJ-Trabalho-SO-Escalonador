@@ -4,75 +4,80 @@
 #include "return_codes.h"
 #include "safe_alloc.h"
 
-int queue_init(queue *pq, int capacity)
+int queue_init(queue *queue, int capacity)
 {
-    pq->current = 0;
-    pq->count = 0;
-    pq->capacity = capacity;
-    pq->items = safe_malloc(capacity * sizeof(void *), pq);
+    queue->current = 0;
+    queue->count = 0;
+    queue->capacity = capacity;
+    queue->items = safe_malloc(capacity * sizeof(void *), queue);
     return OK;
 }
 
-void queue_dispose(queue *pq)
+void queue_dispose(queue *queue)
 {
-    safe_free(pq->items, pq);
+    safe_free(queue->items, queue);
 }
 
-int queue_enqueue(queue *pq, void *item)
+int queue_enqueue(queue *queue, void *item)
 {
-    if (pq->count == pq->capacity)
+    if (queue->count == queue->capacity)
         return ERR_QUEUE_FULL;
 
-    int index = (pq->current + pq->count) % pq->capacity;
-    pq->items[index] = item;
-    pq->count++;
+    int index = (queue->current + queue->count) % queue->capacity;
+    queue->items[index] = item;
+    queue->count++;
 
     return OK;
 }
 
-int queue_dequeue(queue *pq, void **out)
+int queue_dequeue(queue *queue, void **out)
 {
-    if (pq->count == 0)
+    if (queue->count == 0)
         return ERR_QUEUE_EMPTY;
 
-    *out = pq->items[pq->current];
-    pq->count--;
-    pq->current = (pq->current + 1) % pq->capacity;
+    *out = queue->items[queue->current];
+    queue->count--;
+    queue->current = (queue->current + 1) % queue->capacity;
 
     return OK;
 }
 
-int queue_get(queue *pq, int index, void **out)
+int queue_get(queue *queue, int index, void **out)
 {
-    if (index < 0 || index >= pq->count)
+    if (index < 0 || index >= queue->count)
         return ERR_OUT_OF_BOUNDS;
-    *out = pq->items[(pq->current + index) % pq->capacity];
+    *out = queue->items[(queue->current + index) % queue->capacity];
     return OK;
 }
 
-int queue_rev_dequeue(queue *pq, void *item)
+int queue_rev_dequeue(queue *queue, void *item)
 {
-    if (pq->count == pq->capacity)
+    if (queue->count == queue->capacity)
         return ERR_QUEUE_FULL;
 
-    int index = pq->current - 1;
-    if (index < 0) index += pq->capacity;
-    pq->items[index] = item;
-    pq->current = index;
-    pq->count++;
+    int index = queue->current - 1;
+    if (index < 0) index += queue->capacity;
+    queue->items[index] = item;
+    queue->current = index;
+    queue->count++;
 
     return OK;
 }
 
-int queue_rev_enqueue(queue *pq, void **out)
+int queue_rev_enqueue(queue *queue, void **out)
 {
-    if (pq->count == 0)
+    if (queue->count == 0)
         return ERR_QUEUE_EMPTY;
 
-    int index = pq->current + pq->count - 1;
-    index = index < 0 ? index + pq->capacity : index % pq->capacity;
-    *out = pq->items[index];
-    pq->count--;
+    int index = queue->current + queue->count - 1;
+    index = index < 0 ? index + queue->capacity : index % queue->capacity;
+    *out = queue->items[index];
+    queue->count--;
 
     return OK;
+}
+
+int queue_count_free(queue *queue)
+{
+    return queue->capacity - queue->count;
 }

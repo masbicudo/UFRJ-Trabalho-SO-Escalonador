@@ -10,12 +10,13 @@ typedef struct _queue {
     int capacity;
 } queue;
 
-int queue_init(queue* pq, int capacity);
-void queue_dispose(queue* pq);
-int queue_enqueue(queue* pq, void* process);
-int queue_dequeue(queue* pq, void** out);
-int queue_get(queue* pq, int index, void** out);
-int queue_rev_dequeue(queue* pq, void* process);
-int queue_rev_enqueue(queue* pq, void** out);
+int queue_init(queue* queue, int capacity);
+void queue_dispose(queue* queue);
+int queue_enqueue(queue* queue, void* process);
+int queue_dequeue(queue* queue, void** out);
+int queue_get(queue* queue, int index, void** out);
+int queue_rev_dequeue(queue* queue, void* process);
+int queue_rev_enqueue(queue* queue, void** out);
+int queue_count_free(queue* queue);
 
 #endif

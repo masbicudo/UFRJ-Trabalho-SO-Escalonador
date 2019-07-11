@@ -51,6 +51,7 @@ struct txt_sim_data
   int time_slice;
   int memory_frames;
   int max_working_set;
+  int wait_frame_queue_capacity;
 
   char *swap_device_name;
 

@@ -42,6 +42,7 @@ bool plan_txt_set_time(simulation_plan *plan, int time, os *os)
     printf("  memory_frames %d\n", data->memory_frames);
     printf("  max_working_set %d\n", data->max_working_set);
     printf("  swap_device_name %s\n", data->swap_device_name);
+    printf("  wait_frame_queue_capacity %s\n", data->wait_frame_queue_capacity);
     device_entry **device = NULL;
     for (int index = 0; (device = (device_entry **)utarray_next(data->devices, device)); index++)
     {
@@ -672,6 +673,7 @@ void plan_txt_get_os_settings(simulation_plan *plan, plan_os_settings *out)
   out->time_slice = data->time_slice;
   out->max_working_set = data->max_working_set;
   out->memory_frames = data->memory_frames;
+  out->wait_frame_queue_capacity = data->wait_frame_queue_capacity;
 }
 void plan_txt_print_time_final_state(simulation_plan *plan, int time, os *os)
 {
@@ -1075,6 +1077,8 @@ void plan_txt_init(simulation_plan *plan, char *filename, int max_sim_procs)
         data->time_slice = num2;
       else if (value_type == Number && strcmp("memory_frames", str_name) == 0)
         data->memory_frames = num2;
+      else if (value_type == Number && strcmp("wait_frame_queue_capacity", str_name) == 0)
+        data->wait_frame_queue_capacity = num2;
       else if (value_type == Number && strcmp("max_working_set", str_name) == 0)
         data->max_working_set = num2;
       else if (value_type == String && strcmp("swap_device", str_name) == 0)

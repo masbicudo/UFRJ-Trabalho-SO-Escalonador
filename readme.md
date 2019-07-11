@@ -58,6 +58,10 @@
     We are not doing this in this simulation...
     we just store the current time unit on each access.
 
+- The wait frame queue should be limited to avoid swaping-out all processes.
+    If the system has N processes waiting in the queue, then the
+    OS will try to swap-out processes to free at least N frames.
+
 ## Memory
 - Installed RAM is given in terms of frames, not in terms of bytes
 - Swap size is not specified, we assumed no limits at all

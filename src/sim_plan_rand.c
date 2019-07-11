@@ -116,6 +116,12 @@ void plan_rand_get_os_settings(simulation_plan *plan, plan_os_settings *out)
   out->time_slice = 4;
   out->max_working_set = 4;
   out->memory_frames = 64;
+
+  // number of processes waiting for a free frame
+  // - if there are 4 processes waiting, then we have
+  //    at least 4 frames being requested, and at most 16
+  //    (4 * max_working_set)
+  out->wait_frame_queue_capacity = 4;
 }
 void plan_rand_print_time_final_state(simulation_plan *plan, int time, os *os)
 {

@@ -47,6 +47,7 @@ void print_constants()
     log_val_i(MAX_SUPPORTED_FRAMES, 23, "maximum number of frames, indicates the maximum amount of RAM that can be installed");
   log_val_i(MAX_WORKING_SET, 23, "invariant maximum working set");
   log_val_i(MAX_PAGE_TABLE_SIZE, 23, "size of the page table for each process, it defines the virtual memory address space size");
+  log_val_i(MAX_WAIT_FRAME_QUEUE_SIZE, 23, "maximum number of waiting processes in the wait frame queue");
   if (err > 0)
   {
     printf("  " $red "%d" $cdef " errors occured!", err);
@@ -210,8 +211,42 @@ void handle_page_fault(os *os, process *proc, int page_number, int swap_device, 
 
     // adding the process to the wait queue for the device
     if (enqueue_on_device(time, os, target_device, proc) == ERR_OUT_OF_MEMORY)
-      pq_enqueue(os->wait_frame_queue, proc);
+      pq_enqueue(os->require_frame_queue, proc);
   }
+}
+
+int os_get_freeing_frames_count(os *os, int swap_device)
+{
+  int freeing_frames = 0;
+  process_queue *blk_queue = os->devices[swap_device].blocked_queue;
+  for (int it = 0; it < blk_queue->count; it++)
+  {
+    process *blk_proc;
+    pq_get(blk_queue, it, &blk_proc);
+    if (blk_proc->pending_op_type == OP_SWAP_OUT)
+    {
+      for (int itW = 0; itW < os->max_working_set; itW++)
+        if (blk_proc->working_set[itW] < 0)
+          freeing_frames++;
+    }
+  }
+  process *blk_proc = os->devices[swap_device].current_process;
+  if (blk_proc->pending_op_type == OP_SWAP_OUT)
+  {
+    for (int itW = 0; itW < os->max_working_set; itW++)
+      if (blk_proc->working_set[itW] < 0)
+        freeing_frames++;
+  }
+  return freeing_frames;
+}
+
+int proc_get_swapout_working_set_count(os *os, process *proc)
+{
+  int count = 0;
+  for (int it = 0; it < os->max_working_set; it++)
+    if (proc->swapout_pages[it] >= 0)
+      count++;
+  return count;
 }
 
 int main()
@@ -230,6 +265,7 @@ int main()
     int time_slice = clamp(conf.time_slice, 0, MAX_TIME_SLICE);
     int max_working_set = clamp(conf.max_working_set, 0, MAX_WORKING_SET);
     int memory_frames = clamp(conf.memory_frames, 0, MAX_SUPPORTED_FRAMES);
+    int wait_frame_queue_capacity = clamp(conf.wait_frame_queue_capacity, 0, MAX_WAIT_FRAME_QUEUE_SIZE);
     const unsigned int page_bit_field = MAX_SUPPORTED_FRAMES - 1;
 
     printf("\n");
@@ -248,7 +284,7 @@ int main()
         return 0;
 
     // initializing OS structure
-    os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL, max_working_set, memory_frames, time_slice);
+    os_init(os, MAX_NUMBER_OF_DEVICES, MAX_PROCESSES, MAX_PRIORITY_LEVEL, max_working_set, memory_frames, time_slice, wait_frame_queue_capacity);
 
     for (int itdev = 0; itdev < MAX_NUMBER_OF_DEVICES; itdev++)
     {
@@ -346,6 +382,58 @@ int main()
           pt_entry->is_on_memory = true;
           pt_entry->last_access = time;
         }
+        else if (proc->pending_op_type == OP_SWAP_OUT)
+        {
+          // changing the state of the OS to indicate that more free frames are available
+          proc->pending_op_type = OP_NONE;
+          memset(proc->working_set, -1, os->max_working_set);
+          int swapout_working_set_count = proc_get_swapout_working_set_count(os, proc);
+          os->freeing_frame_count -= swapout_working_set_count;
+          os->free_frame_count += swapout_working_set_count;
+
+          // finding a process to assign the pages to
+          process *next_wait_proc;
+          while (pq_get(os->require_frame_queue, 0, &next_wait_proc) == OK)
+          {
+            int swapin_working_set_count = proc_get_swapout_working_set_count(os, next_wait_proc);
+            int required_frames = next_wait_proc->pending_op_type == OP_SWAP_IN ? swapin_working_set_count : 1;
+            if (os->free_frame_count > required_frames)
+            {
+              pq_dequeue(os->require_frame_queue, &next_wait_proc); // no test is needed, we did a pq_get already, we are sure the item is there
+              memcpy(next_wait_proc->working_set, next_wait_proc->swapout_pages, os->max_working_set * sizeof(int));
+              for (int itP = 0; itP < os->max_working_set; itP++)
+              {
+                int page_number = next_wait_proc->working_set[itP];
+                if (page_number < 0)
+                  continue;
+                int frame_number = os_find_free_frame(os);
+                page_table_entry *pt_entry = next_wait_proc->page_table + page_number;
+                pt_entry->frame = frame_number;
+                pt_entry->is_on_memory = true;
+                pt_entry->last_access = time;
+
+                // Enqueueing the swap-device load operation.
+                // In a real OS, we would need to issue a read
+                // operation for each saved page, but in this
+                // simulation a single read will be done
+                next_wait_proc->pending_op_type = OP_SWAPPED_IN;
+                enqueue_on_device(time, os, os->devices + swap_device, next_wait_proc); // out of memory not possible, we have the frames already
+              }
+            }
+          }
+        }
+        else if (proc->pending_op_type == OP_SWAPPED_IN)
+        {
+          // after the swap-in operation finishes we enqueue
+          // the process in the highest possible priority queue,
+          // the page ready queue, processes in this queue
+          // cannot be swapped-out, they will run at least
+          // for a small amount
+          if (pq_enqueue(os->scheduler->page_ready_queue, proc) == OK)
+          {
+            // TODO:
+          }
+        }
 
         // What queue should this process return to?
         // depends on the kind of operation it was executing:
@@ -373,7 +461,7 @@ int main()
             if (exec_on_device(time, os, dev, next_proc) == ERR_OUT_OF_MEMORY)
             {
               // waiting for a free frame in the queue for that purpose
-              pq_enqueue(os->wait_frame_queue, proc);
+              pq_enqueue(os->require_frame_queue, proc);
 
               continue_parent = true;
               break;
@@ -387,38 +475,45 @@ int main()
       if (continue_parent)
         continue;
 
-      // # Swap-out processes to fulfill the requirements of procs waiting for a free memory frame.
-      if (os->wait_frame_queue->count > 0)
+      // # Swap-out processes to fulfill the requirements
+      // of procs waiting for a free memory frame.
+      while (os->require_frame_queue->count > 0)
       {
-        // TODO: if there are free frames already give them to the
-        // waiting processes
-
-        // TODO: count how much memory is needed by the waiting processes
-        // TODO: processes that are swapping-in require a full working set of frames
-
         // check how much memory is going to be free
-        int frame_yet_to_be_free = 0;
-        process_queue *blk_queue = os->devices[swap_device].blocked_queue;
-        for (int it = 0; it < blk_queue->count; it++)
+        int cnt_freeing_frames = os_get_freeing_frames_count(os, swap_device);
+        int cnt_free_frames = os->free_frame_count;
+        int cnt_expected_free_frames = cnt_freeing_frames + cnt_free_frames;
+
+        int cnt_required_free_frames = 0;
+        for (int it = 0; it < os->require_frame_queue->count; it++)
         {
-          process *blk_proc = blk_queue->items[it];
-          if (blk_proc->pending_op_type == OP_SWAP_OUT)
+          process *proc_req;
+          pq_get(os->require_frame_queue, it, &proc_req);
+          if (proc_req->pending_op_type == OP_PAGE_LOAD)
+            cnt_required_free_frames++;
+          else if (proc_req->pending_op_type == OP_SWAP_IN)
           {
-            for (int itW = 0; itW < os->max_working_set; itW++)
-              if (blk_proc->working_set[itW] < 0)
-                frame_yet_to_be_free++;
+            int swapout_working_set_count = proc_get_swapout_working_set_count(os, proc_req);
+            cnt_required_free_frames += swapout_working_set_count;
           }
         }
-        process *blk_proc = os->devices[swap_device].current_process;
-        if (blk_proc->pending_op_type == OP_SWAP_OUT)
-        {
-          for (int itW = 0; itW < os->max_working_set; itW++)
-            if (blk_proc->working_set[itW] < 0)
-              frame_yet_to_be_free++;
-        }
 
-        // TODO: if more memory is needed than what is going to be free
-        // swap out more processes
+        // there is a soft-limit of the number of freeing frames
+        // the actual number may be greater, but it won't get a
+        // lot greater because we will stop trying to swap-out more
+        // processes if the value is over the limit
+        if (cnt_freeing_frames > 4)
+          break;
+
+        // if less free frames are required than what is being provided
+        // then don't try to swap-out any more processes
+        if (cnt_required_free_frames > cnt_expected_free_frames)
+          break;
+
+        process *waiting_proc;
+        pq_get(os->require_frame_queue, 0, &waiting_proc);
+        
+        int frame = os_find_free_frame(os);
 
         // finding a process to swap-out
         process *swapout_proc = NULL;
@@ -430,7 +525,8 @@ int main()
 
           for (int itQ = 0; itQ < dev->blocked_queue->count; itQ++)
           {
-            process *blk_proc = dev->blocked_queue->items[itQ];
+            process *blk_proc;
+            pq_get(dev->blocked_queue, itQ, &blk_proc);
             // a process can get here with the following states:
             // - PROC_STATE_BLOCKED_SUSPEND
             // - PROC_STATE_BLOCKED_SWAPPING
@@ -473,6 +569,9 @@ int main()
 
         if (swapout_proc != NULL)
         {
+          int swapout_working_set_count = proc_get_swapout_working_set_count(os, swapout_proc);
+          os->freeing_frame_count += swapout_working_set_count;
+
           // setting the new state
           swapout_proc->pending_op_type = OP_SWAP_OUT;
           swapout_proc->store_op.page_number = -1; // swap-out operation swaps every page present in a memory frame
