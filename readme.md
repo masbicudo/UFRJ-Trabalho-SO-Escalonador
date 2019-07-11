@@ -1,3 +1,7 @@
+# Slides
+
+- https://docs.google.com/presentation/d/17hXJycO3VFuSdjElKmPwCANJKDK0AiR0tA0HCjKO5Pc/edit?ts=5d268aa2#slide=id.g5bbbb9e0a8_0_21
+
 # Compiling
 
     gcc -I src/libs -I src/os src/os/*.c src/libs/*.c src/*.c -o a.exe -g
